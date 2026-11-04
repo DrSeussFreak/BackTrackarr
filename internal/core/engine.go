@@ -444,7 +444,7 @@ func (e *Engine) ImportTrakt(ctx context.Context, user string, report func(strin
 		return fmt.Errorf("trakt is not connected")
 	}
 	added := 0
-	err := t.ImportHistory(ctx, func(m model.Media, at time.Time) error {
+	err := t.ImportHistory(ctx, time.Time{}, func(m model.Media, at time.Time) error {
 		if err := e.st.UpsertMedia(ctx, &m); err != nil {
 			return err
 		}

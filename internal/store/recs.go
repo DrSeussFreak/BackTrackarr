@@ -134,18 +134,19 @@ type RecRun struct {
 }
 
 type Rec struct {
-	ID      int64  `json:"id"`
-	RunID   int64  `json:"-"`
-	Kind    string `json:"kind"` // movie | show
-	Title   string `json:"title"`
-	Year    int    `json:"year,omitempty"`
-	Reason  string `json:"reason,omitempty"`
-	IMDB    string `json:"imdb,omitempty"`
-	TMDB    int    `json:"tmdb,omitempty"`
-	TVDB    int    `json:"tvdb,omitempty"`
-	InPlex  bool   `json:"in_plex"`
-	Seen    bool   `json:"seen"`
-	AddedTo string `json:"added_to,omitempty"`
+	ID        int64    `json:"id"`
+	RunID     int64    `json:"-"`
+	Kind      string   `json:"kind"` // movie | show
+	Title     string   `json:"title"`
+	Year      int      `json:"year,omitempty"`
+	Reason    string   `json:"reason,omitempty"`
+	IMDB      string   `json:"imdb,omitempty"`
+	TMDB      int      `json:"tmdb,omitempty"`
+	TVDB      int      `json:"tvdb,omitempty"`
+	InPlex    bool     `json:"in_plex"`
+	Seen      bool     `json:"seen"`
+	AddedTo   string   `json:"added_to,omitempty"`
+	Providers []string `json:"providers,omitempty"` // where it streams (TMDB, STREAMING_REGION)
 }
 
 func (s *Store) SaveRecRun(ctx context.Context, r *RecRun) error {
@@ -161,8 +162,8 @@ func (s *Store) SaveRecRun(ctx context.Context, r *RecRun) error {
 	}
 	for i := range r.Recs {
 		c := &r.Recs[i]
-		if err := tx.QueryRowContext(ctx, `INSERT INTO recs(run_id,kind,title,year,reason,imdb,tmdb,tvdb,in_plex,seen) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id`,
-			r.ID, c.Kind, c.Title, ni(c.Year), ns(c.Reason), ns(c.IMDB), ni(c.TMDB), ni(c.TVDB), c.InPlex, c.Seen).Scan(&c.ID); err != nil {
+		if err := tx.QueryRowContext(ctx, `INSERT INTO recs(run_id,kind,title,year,reason,imdb,tmdb,tvdb,in_plex,seen,providers) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
+			r.ID, c.Kind, c.Title, ni(c.Year), ns(c.Reason), ns(c.IMDB), ni(c.TMDB), ni(c.TVDB), c.InPlex, c.Seen, jsonList(c.Providers)).Scan(&c.ID); err != nil {
 			return err
 		}
 	}
@@ -203,7 +204,7 @@ func (s *Store) GetRec(ctx context.Context, id int64) (*Rec, error) {
 
 func (s *Store) recs(ctx context.Context, where string, args ...any) ([]Rec, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT id, run_id, kind, title, COALESCE(year,0), COALESCE(reason,''), COALESCE(imdb,''),
-		COALESCE(tmdb,0), COALESCE(tvdb,0), in_plex, seen, COALESCE(added_to,'') FROM recs `+where, args...)
+		COALESCE(tmdb,0), COALESCE(tvdb,0), in_plex, seen, COALESCE(added_to,''), COALESCE(providers,'') FROM recs `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -211,9 +212,11 @@ func (s *Store) recs(ctx context.Context, where string, args ...any) ([]Rec, err
 	var out []Rec
 	for rows.Next() {
 		var c Rec
-		if err := rows.Scan(&c.ID, &c.RunID, &c.Kind, &c.Title, &c.Year, &c.Reason, &c.IMDB, &c.TMDB, &c.TVDB, &c.InPlex, &c.Seen, &c.AddedTo); err != nil {
+		var prov string
+		if err := rows.Scan(&c.ID, &c.RunID, &c.Kind, &c.Title, &c.Year, &c.Reason, &c.IMDB, &c.TMDB, &c.TVDB, &c.InPlex, &c.Seen, &c.AddedTo, &prov); err != nil {
 			return nil, err
 		}
+		c.Providers = parseList(prov)
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -250,4 +253,10 @@ func (s *Store) ArchiveRated(ctx context.Context, desc bool, limit int) ([]Rated
 	return s.rated(ctx, `SELECT type, title, COALESCE(year,0), MAX(user_rating), 0 FROM plex_items
 		WHERE type IN ('movie','show') AND user_rating > 0 AND deleted_at IS NULL
 		GROUP BY type, title, year ORDER BY MAX(user_rating) `+order+` LIMIT ?`, limit)
+}
+
+// SourceCounts returns how many plays came from each source (plex-webhook,
+// netflix-import, disneyplus, trakt-pull...).
+func (s *Store) SourceCounts(ctx context.Context) ([]NameCount, error) {
+	return s.nameCounts(ctx, `SELECT source, COUNT(*) c FROM plays GROUP BY source ORDER BY c DESC`)
 }

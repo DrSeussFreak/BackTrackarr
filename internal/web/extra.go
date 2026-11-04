@@ -338,7 +338,7 @@ func (s *Server) recsPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) recsRun(w http.ResponseWriter, r *http.Request) {
 	n, _ := strconv.Atoi(r.FormValue("count"))
 	req := core.RecRequest{User: r.FormValue("user"), Provider: r.FormValue("provider"), Kind: r.FormValue("kind"), Count: n,
-		IncludeAdult: r.FormValue("adult") == "1", Note: r.FormValue("note")}
+		IncludeAdult: r.FormValue("adult") == "1", Note: r.FormValue("note"), OnlyMine: r.FormValue("mine") == "1"}
 	s.eng.Jobs.Start(s.eng.Context(), "recommendations", func(ctx context.Context, report func(string)) error {
 		return s.eng.Recommend(ctx, req, report)
 	})

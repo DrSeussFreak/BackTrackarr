@@ -1,33 +1,31 @@
 # BackTrackarr
 
-A self-hosted, Trakt-style watch history for Plex. It records everything you
-watch, keeps it for decades, and forwards each play to Trakt, Simkl, Floppy,
-and anything that accepts Plex webhooks.
+A self-hosted, Trakt-style watch history for Plex and your streaming
+services. It records everything you watch, keeps it for decades, and
+forwards each play to Trakt, Simkl, Floppy, and anything that accepts Plex
+webhooks.
 
 - **Small footprint:** one static Go binary on distroless (~20 MB image). It
-  uses about 15–30 MB of RAM and almost no CPU when idle.
+  uses about 15–50 MB of RAM and almost no CPU when idle.
 - **Long-term storage:** SQLite in WAL mode, with a pure-Go driver (no CGO).
-  Daily snapshots go to `/data/backups`, and you can export everything as
-  NDJSON.
+  Compressed snapshots go to `/data/backups` daily, and you can export
+  everything as NDJSON.
 - **Delivery that survives outages:** every outgoing event goes into a
   durable per-service queue. Events are delivered in order, retried with
   backoff, and rate-limited for Trakt. If a service is down for a day,
   nothing is lost: completed plays are sent later as history entries with
   the original timestamp.
 
-## Why SQLite
+## Install
 
-Personal watch history is small. Fifty years at 20 plays a day is about
-365k rows, and SQLite handles hundreds of millions. Postgres would add a
-second container and 50–100 MB of RAM with no real gain at this scale.
-History pages use keyset pagination, so paging back to 1998 is as fast as
-loading today. The database is one file, so backing it up is a file copy.
-
-## Quick start
+Docker, Docker Compose, Portainer, Linux (systemd) and Windows are all
+covered step by step in **[docs/INSTALL.md](docs/INSTALL.md)**. The quickest
+way:
 
 ```bash
+git clone https://github.com/DrSeussFreak/BackTrackarr.git && cd BackTrackarr
 cp .env.example .env    # then edit it
-docker compose up -d --build
+docker compose up -d
 ```
 
 Open `http://<host>:8787`. Then go to **Sync**:
@@ -40,9 +38,61 @@ Open `http://<host>:8787`. Then go to **Sync**:
 3. **Back-fill.** Click **Import Plex watch history**, and/or **Import Trakt
    history**. Then use **Push history** to send your full history to each
    service.
+4. **Streaming services.** See the **Streaming** page (below).
 
-The first build runs `go mod tidy`. Copy the generated `go.sum` out of the
-build if you want reproducible builds.
+## Why SQLite, and how big it gets
+
+SQLite is the right database here even at many gigabytes. It handles
+databases up to 281 TB, and multi-GB files are routine for it. What matters
+for speed is indexes, not file size. Every page here uses an index: history
+uses keyset pagination, so paging back to 1998 is as fast as loading today,
+and the dashboard's totals are cached.
+
+Postgres or MySQL would only help with things this app doesn't do: many
+programs writing at once over a network, or several BackTrackarr copies
+sharing one database. The cost would be a second container, 50–100 MB more
+RAM, and harder backups.
+
+Rough sizes:
+
+- **Watch history:** 50 years of heavy use (400k plays) is about 45 MB.
+- **Library archive:** compressed full metadata is a few KB per item, so a
+  large Plex library (50k movies and episodes, with music) is a few hundred
+  MB to a couple of GB, growing slowly as versions are kept.
+
+**At 5 GB or more, mind the disk space for backups.** Each daily snapshot is
+a full copy, so they're gzip-compressed (`BACKUP_COMPRESS=true`, roughly
+3–5× smaller), and `BACKUP_KEEP` controls how many are kept. Memory use
+doesn't grow with the file: SQLite reads pages from disk and BackTrackarr
+caps its page cache at 8 MB.
+
+## Streaming services (Netflix, Disney+, Hulu, Prime Video…)
+
+None of the big streaming services offers a public API for your watch
+history, so there's no account to connect. The **Streaming** page offers
+four ways in instead. Use any or all of them; duplicates are dropped.
+
+1. **History exports.** Upload or drop in a folder:
+   - Netflix's *Viewing activity* download (`NetflixViewingHistory.csv`), or
+     the fuller `ViewingActivity.csv` from *Download your personal
+     information*. Profiles become users; trailers and previews are skipped.
+   - Amazon's *Request My Data* (Prime Video).
+   - Any CSV or JSON from Disney+, Hulu, Max, Paramount+, Peacock, Apple TV+,
+     Crunchyroll and others. Columns are matched by name.
+
+   Titles like *"Stranger Things: Season 1: Chapter One"* are split into
+   show, season and episode. IMDb/TMDb/TVDB ids and episode numbers are
+   looked up via TMDB (`TMDB_API_KEY`) or Trakt.
+2. **Live in your browser.** A one-click userscript (Tampermonkey or
+   Violentmonkey) reports what you play on about 25 streaming sites, live,
+   to `POST /api/scrobble/{token}`. Anything else can use that API too.
+3. **Jellyfin and Emby** webhooks, live.
+4. **Trakt and Simkl pulls.** Plays that their apps, imports and browser
+   extensions recorded are pulled in every hour.
+
+Recommendations show **where each title streams** in your region (TMDB
+watch providers). **Only what I can watch** limits picks to what's in your
+Plex or on `MY_STREAMING_SERVICES`.
 
 ## Supported services
 
@@ -185,12 +235,19 @@ Adult content is supported, and kept private:
 
 All API routes sit behind the admin basic auth.
 
+Exceptions: the webhook and scrobble endpoints below use the webhook token in the URL instead.
+
 - `GET /api/stats?user=`
 - `GET /api/history?user=&kind=movie|episode&q=&limit=&before=<cursor>`
   returns `{items, next}`
 - `GET /api/export` streams every play as NDJSON
 - `POST /webhook/plex/{token}` takes a Plex multipart webhook, or a raw JSON
   payload for testing. It needs no basic auth; the token protects it.
+- `POST /webhook/jellyfin/{token}` and `POST /webhook/emby/{token}` take
+  Jellyfin (webhook plugin, Generic destination) and Emby webhooks.
+- `POST /api/scrobble/{token}` takes a play from anywhere:
+  `{"action":"start|pause|stop|watched","service":"Netflix","raw_title":"Show: Season 1: Episode","progress":42}`,
+  or structured `title`/`show`/`season`/`episode`/`ids` fields.
 
 ## Configuration
 

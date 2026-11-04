@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-const Version = "0.1.0"
+// Version is set at build time (-ldflags "-X .../internal/model.Version=v1.2.3").
+var Version = "0.2.0-dev"
 
 const (
 	Movie   = "movie"

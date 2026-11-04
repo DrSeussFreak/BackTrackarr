@@ -258,6 +258,7 @@ CREATE TABLE IF NOT EXISTS recs (
   tvdb        INTEGER,
   in_plex     INTEGER NOT NULL DEFAULT 0,
   seen        INTEGER NOT NULL DEFAULT 0,
-  added_to    TEXT
+  added_to    TEXT,
+  providers   TEXT
 );
 CREATE INDEX IF NOT EXISTS recs_run ON recs(run_id)

@@ -7,6 +7,7 @@
 package store
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -15,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -45,6 +47,9 @@ type Store struct {
 	gen        atomic.Int64
 	statsMu    sync.Mutex
 	statsCache map[string]cachedStats
+
+	// CompressBackups gzips daily snapshots (BACKUP_COMPRESS, on by default).
+	CompressBackups bool
 }
 
 type cachedStats struct {
@@ -85,7 +90,7 @@ func Open(dir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{DB: db, dir: dir}, nil
+	return &Store{DB: db, dir: dir, CompressBackups: true}, nil
 }
 
 func (s *Store) Close() error { return s.DB.Close() }
@@ -161,6 +166,13 @@ func (s *Store) findID(ctx context.Context, m *model.Media) (int64, error) {
 		se := func(col string, v any) candidate {
 			return candidate{true, `SELECT id FROM media WHERE kind='episode' AND ` + col + `=? AND season=? AND episode=? LIMIT 1`, []any{v, m.Season, m.Episode}}
 		}
+		// Episode 0 means "number unknown" (streaming exports give only a title),
+		// so such episodes are matched by title instead of number.
+		if m.Episode == 0 {
+			se = func(col string, v any) candidate {
+				return candidate{true, `SELECT id FROM media WHERE kind='episode' AND ` + col + `=? AND season=? AND episode=0 AND title=? LIMIT 1`, []any{v, m.Season, m.Title}}
+			}
+		}
 		if m.ShowIDs.TVDB != 0 {
 			cs = append(cs, se("show_tvdb", m.ShowIDs.TVDB))
 		}
@@ -178,7 +190,8 @@ func (s *Store) findID(ctx context.Context, m *model.Media) (int64, error) {
 			candidate{m.IDs.IMDB != "", `SELECT id FROM media WHERE kind='episode' AND imdb=? LIMIT 1`, []any{m.IDs.IMDB}},
 			candidate{m.IDs.TMDB != 0, `SELECT id FROM media WHERE kind='episode' AND tmdb=? LIMIT 1`, []any{m.IDs.TMDB}},
 			candidate{m.IDs.Trakt != 0, `SELECT id FROM media WHERE kind='episode' AND trakt=? LIMIT 1`, []any{m.IDs.Trakt}},
-			candidate{m.IDs.Empty() && m.ShowIDs.Empty() && m.ShowTitle != "", `SELECT id FROM media WHERE kind='episode' AND show_title=? AND season=? AND episode=? LIMIT 1`, []any{m.ShowTitle, m.Season, m.Episode}},
+			candidate{m.IDs.Empty() && m.ShowIDs.Empty() && m.ShowTitle != "" && m.Episode != 0, `SELECT id FROM media WHERE kind='episode' AND show_title=? AND season=? AND episode=? LIMIT 1`, []any{m.ShowTitle, m.Season, m.Episode}},
+			candidate{m.IDs.Empty() && m.ShowIDs.Empty() && m.ShowTitle != "" && m.Episode == 0, `SELECT id FROM media WHERE kind='episode' AND show_title=? AND season=? AND episode=0 AND title=? LIMIT 1`, []any{m.ShowTitle, m.Season, m.Title}},
 		)
 	}
 	for _, c := range cs {
@@ -767,11 +780,26 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 		return "", err
 	}
 	name := filepath.Join(dir, "backtrackarr-"+time.Now().Format("20060102-150405")+".db")
-	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, name); err != nil {
+	tmp := name + ".partial"
+	os.Remove(tmp)
+	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, tmp); err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
+	if s.CompressBackups {
+		if err := gzipFile(tmp, name+".gz"); err != nil {
+			os.Remove(tmp)
+			return "", err
+		}
+		os.Remove(tmp)
+		name += ".gz"
+	} else if err := os.Rename(tmp, name); err != nil {
 		return "", err
 	}
 	if keep > 0 {
 		files, _ := filepath.Glob(filepath.Join(dir, "backtrackarr-*.db"))
+		gz, _ := filepath.Glob(filepath.Join(dir, "backtrackarr-*.db.gz"))
+		files = append(files, gz...)
 		sort.Strings(files)
 		for len(files) > keep {
 			os.Remove(files[0])
@@ -803,4 +831,35 @@ func migrateOldName(dir, path string) {
 		}
 		return
 	}
+}
+
+// gzipFile compresses src into dst (written to a temp name first, so a crash
+// never leaves a truncated backup). BestSpeed keeps CPU use low.
+func gzipFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	tmp := dst + ".partial"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	zw, _ := gzip.NewWriterLevel(out, gzip.BestSpeed)
+	if _, err := io.Copy(zw, in); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := zw.Close(); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, dst)
 }

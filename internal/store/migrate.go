@@ -14,7 +14,8 @@ import (
 //
 //	1: first release (movies and episodes)
 //	2: music (media.album, media.mbid, 'track' kind) and private plays
-const schemaVersion = 2
+//	3: recs.providers (where to stream a recommendation)
+const schemaVersion = 3
 
 func hasTable(db *sql.DB, name string) (bool, error) {
 	var n int
@@ -52,6 +53,11 @@ func migrate(db *sql.DB) error {
 	if ver < 2 {
 		if err := migrateV2(db); err != nil {
 			return fmt.Errorf("to version 2: %w", err)
+		}
+	}
+	if ver < 3 {
+		if err := addColumn(db, "recs", "providers", "TEXT"); err != nil {
+			return fmt.Errorf("to version 3: %w", err)
 		}
 	}
 	return nil
@@ -108,4 +114,16 @@ func migrateV2(db *sql.DB) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// addColumn adds a column if the table exists and doesn't have it yet.
+func addColumn(db *sql.DB, table, col, def string) error {
+	if ok, err := hasTable(db, table); err != nil || !ok {
+		return err
+	}
+	if ok, err := hasColumn(db, table, col); err != nil || ok {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + col + ` ` + def)
+	return err
 }

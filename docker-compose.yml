@@ -1,7 +1,11 @@
+# BackTrackarr with Docker Compose.
+#   cp .env.example .env    # then edit it
+#   docker compose up -d
+# To build from source instead of pulling the published image:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 services:
   backtrackarr:
-    build: .
-    image: backtrackarr:latest
+    image: ghcr.io/drseussfreak/backtrackarr:latest
     container_name: backtrackarr
     restart: unless-stopped
     ports:
@@ -11,6 +15,8 @@ services:
       TZ: ${TZ:-UTC}
     volumes:
       - backtrackarr-data:/data
+      # Drop CLZ and streaming-service exports here to import them automatically:
+      # - ./imports:/data/import
     deploy:
       resources:
         limits:

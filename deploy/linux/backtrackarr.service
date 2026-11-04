@@ -1,0 +1,32 @@
+[Unit]
+Description=BackTrackarr watch history and scrobbler
+Documentation=https://github.com/DrSeussFreak/BackTrackarr
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=backtrackarr
+Group=backtrackarr
+EnvironmentFile=/etc/backtrackarr/backtrackarr.env
+Environment=DATA_DIR=/var/lib/backtrackarr
+Environment=GOMEMLIMIT=96MiB
+Environment=GOGC=50
+WorkingDirectory=/var/lib/backtrackarr
+ExecStart=/usr/local/bin/backtrackarr
+Restart=on-failure
+RestartSec=5
+
+# Hardening: the service can only write its data folder.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/backtrackarr
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

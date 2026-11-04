@@ -72,6 +72,7 @@ var funcs = template.FuncMap{
 	"list":    func(v ...string) []string { return v },
 	"i64":     func(n int) int64 { return int64(n) },
 	"inc":     func(n int) int { return n + 1 },
+	"mine":    func(string) bool { return false }, // replaced per server in New
 }
 
 func num(n int64) string {
@@ -91,8 +92,13 @@ func num(n int64) string {
 
 func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger) *Server {
 	s := &Server{cfg: cfg, st: st, eng: eng, log: log, tmpl: map[string]*template.Template{}, auth: map[string]*authState{}}
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs"} {
-		s.tmpl[page] = template.Must(template.New("").Funcs(funcs).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
+	fm := template.FuncMap{}
+	for k, v := range funcs {
+		fm[k] = v
+	}
+	fm["mine"] = eng.IsMyService
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming"} {
+		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
 }
@@ -125,6 +131,7 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("GET /api/history", s.apiHistory)
 	admin.HandleFunc("GET /api/export", s.apiExport)
 	s.routesExtra(admin)
+	s.routesStreaming(root, admin)
 	root.Handle("/", s.guard(admin))
 	return root
 }

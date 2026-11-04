@@ -1,16 +1,20 @@
-# ---- build ----
-FROM golang:1.23-alpine AS build
+# Multi-arch image (linux/amd64, linux/arm64, linux/arm/v7). The Go build
+# cross-compiles on the build machine, so no emulation is needed.
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS build
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+ARG TARGETVARIANT=
+ARG VERSION=dev
 WORKDIR /src
-COPY go.mod go.sum* ./
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-# go mod tidy resolves go.sum on first build; commit the generated go.sum afterwards.
-RUN go mod tidy && \
-    go vet ./... && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/backtrackarr . && \
+RUN GOARM="${TARGETVARIANT#v}" CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
+    go build -trimpath -ldflags="-s -w -X github.com/DrSeussFreak/BackTrackarr/internal/model.Version=${VERSION}" \
+    -o /out/backtrackarr . && \
     mkdir -p /out/data
 
-# ---- run ----
-# distroless/static: ~2 MB, includes CA certs and tzdata, runs as non-root.
+# distroless/static: ~2 MB, includes CA certs and tzdata, runs as non-root (uid 65532).
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/backtrackarr /backtrackarr
 COPY --from=build --chown=65532:65532 /out/data /data

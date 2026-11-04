@@ -1,0 +1,60 @@
+{{define "content"}}
+<div class="head"><h1>Streaming services</h1></div>
+<p class="muted">Netflix, Disney+, Hulu, Prime Video, Max, Paramount+, Peacock, Apple TV+ and the rest have no public watch-history API, so there's no account to connect. BackTrackarr gets those plays four ways. Use any or all of them; duplicates are dropped.</p>
+{{if not .CanResolve}}<p class="warn">Set <code>TMDB_API_KEY</code> (free at themoviedb.org) or <code>TRAKT_CLIENT_ID</code> so streaming titles are matched to IMDb/TMDb/TVDB ids. Without one, plays are still stored by title, but can't be sent to Trakt or Simkl.</p>{{end}}
+
+<div class="grid2">
+  <section class="panel">
+    <h2>1. Import a history export</h2>
+    <form method="post" action="/streaming/import" enctype="multipart/form-data">
+      <p class="row"><input type="file" name="file" accept=".csv,.json,.txt,.tsv" required></p>
+      <p class="row">
+        <select name="service"><option value="auto">Service: detect</option>{{range .Services}}<option>{{.}}</option>{{end}}</select>
+        <input name="user" placeholder="Local user (default: profile name)" list="users">
+        <input name="profile" placeholder="Only this profile (optional)" size="16">
+        <datalist id="users">{{range .Users}}<option value="{{.Name}}">{{end}}</datalist>
+        <button>Import</button>
+      </p>
+    </form>
+    <ul class="small">
+      <li><b>Netflix:</b> Account → Profile → <i>Viewing activity</i> → <i>Download all</i> (<code>NetflixViewingHistory.csv</code>), or the fuller <code>ViewingActivity.csv</code> from Account → <i>Download your personal information</i> (it covers all profiles; trailers and previews are skipped).</li>
+      <li><b>Prime Video:</b> amazon.com → <i>Request My Data</i> → Prime Video; import the viewing-history CSV.</li>
+      <li><b>Disney+, Hulu, Max, Paramount+, Peacock, Apple TV+…:</b> use each service's privacy/data request, or any tool that exports your history to CSV/JSON. Columns are matched by name (Title, Show/Series, Season, Episode, Date/Watched, Profile…).</li>
+      <li>Files dropped in <code>{{.Cfg.StreamImportDir}}</code> import automatically; put them in a subfolder named after the service (e.g. <code>netflix/</code>, <code>hulu/</code>) to tag them.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>2. Track live in your browser</h2>
+    <p>Install a userscript manager (<a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> or <a href="https://violentmonkey.github.io/" target="_blank" rel="noopener">Violentmonkey</a>), then:</p>
+    <p class="row"><a class="btn" href="/streaming/backtrackarr.user.js">Install the scrobbler</a>
+      {{if .Users}}<span class="muted small">or for a user:</span> {{range .Users}}<a class="small" href="/streaming/backtrackarr.user.js?user={{.Name}}">{{.Name}}</a> {{end}}{{end}}</p>
+    <p class="muted small">Works on Netflix, Disney+, Hulu, Prime Video, Max, Paramount+, Peacock, Apple TV+, Crunchyroll, Tubi, Pluto TV and more. It reports start, pause and stop, and marks a play watched at 90%. Streaming sites change often, so it's best effort: it reads the player's title, then the browser's media info, then the page title. It contains your webhook token, so install it only in your own browser.</p>
+    <p class="muted small">Anything else can send plays too (phone shortcuts, scripts, other tools): <code class="copy">POST {{.ScrobbleURL}}</code> with JSON like <code>{"action":"watched","service":"Hulu","raw_title":"Shōgun","subtitle":"S1 E3 · Tomorrow Is Tomorrow"}</code>.</p>
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="panel">
+    <h2>3. Jellyfin and Emby</h2>
+    <p><b>Jellyfin:</b> install the <i>Webhook</i> plugin, add a <i>Generic</i> destination with this URL, and tick Playback Start, Playback Stop and User Data Saved:</p>
+    <p><code class="copy">{{.JellyfinURL}}</code></p>
+    <p><b>Emby:</b> Settings → Webhooks → add this URL, with playback and "mark played" events:</p>
+    <p><code class="copy">{{.EmbyURL}}</code></p>
+  </section>
+
+  <section class="panel">
+    <h2>4. Pull from Trakt and Simkl</h2>
+    <p class="muted">If you already use Trakt's or Simkl's apps, browser extensions (like Universal Trakt Scrobbler) or their Netflix imports, BackTrackarr pulls those plays in every {{.Cfg.TrackerPull}}. Pulled plays are stored, not sent back out.</p>
+    <p class="small">Trakt: last pull {{ts .TraktPull}} · Simkl: last pull {{ts .SimklPull}}</p>
+    <form method="post" action="/streaming/pull" class="row"><button class="ghost">Pull now</button><span class="muted small">Connect Trakt and Simkl on the Sync page first.</span></form>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Plays by source</h2>
+  <ol class="rank">{{range .Sources}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{else}}<li class="muted">No plays yet.</li>{{end}}</ol>
+</section>
+
+{{template "jobs" .Jobs}}
+{{end}}

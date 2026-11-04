@@ -4,6 +4,7 @@ package config
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +40,8 @@ type Config struct {
 	RelayURLs         []string
 	WebhookURLs       []string
 
-	BackupKeep int
+	BackupKeep     int
+	BackupCompress bool
 
 	// Plex archive and tools. BackTrackarr only reads from Plex unless PlexAllowWrites.
 	PlexAllowWrites  bool
@@ -65,6 +67,18 @@ type Config struct {
 	GeminiModel    string
 	GeminiURL      string
 	AIIncludeAdult bool
+
+	// Streaming services (Netflix, Disney+, Hulu, Prime Video...): no public
+	// APIs exist, so plays come from history exports, the browser userscript,
+	// or Trakt/Simkl pulls. TMDB (or Trakt) turns titles into ids.
+	TMDBKey         string
+	TMDBURL         string
+	StreamingRegion string   // for where-to-watch, e.g. US, GB, CA
+	MyServices      []string // your subscriptions, highlighted on recommendations
+	TrackerPull     time.Duration
+	TrackerPullUser string
+	StreamImportDir string
+	EnvFile         string // settings file that was loaded, if any
 }
 
 // MediaServer is a Jellyfin or Emby server that playlists can be copied to.
@@ -87,6 +101,7 @@ type ArrInstance struct {
 }
 
 func Load() *Config {
+	envFile := loadEnvFile()
 	c := &Config{
 		Listen:            env("LISTEN", ":8787"),
 		DataDir:           env("DATA_DIR", "./data"),
@@ -107,6 +122,7 @@ func Load() *Config {
 		RelayURLs:         list("RELAY_URLS"),
 		WebhookURLs:       list("WEBHOOK_URLS"),
 		BackupKeep:        envInt("BACKUP_KEEP", 7),
+		BackupCompress:    envBool("BACKUP_COMPRESS", true),
 		PlexAllowWrites:   envBool("PLEX_ALLOW_WRITES", false),
 		PlexArchiveEvery:  time.Duration(envInt("PLEX_ARCHIVE_MINUTES", 60)) * time.Minute,
 		PlexWatchScan:     time.Duration(envInt("PLEX_WATCH_SCAN_SECONDS", 300)) * time.Second,
@@ -121,8 +137,16 @@ func Load() *Config {
 		GeminiModel:       env("GEMINI_MODEL", "gemini-2.5-pro"),
 		GeminiURL:         strings.TrimRight(env("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com"), "/"),
 		AIIncludeAdult:    envBool("AI_INCLUDE_ADULT", false),
+		TMDBKey:           env("TMDB_API_KEY", ""),
+		TMDBURL:           strings.TrimRight(env("TMDB_BASE_URL", "https://api.themoviedb.org"), "/"),
+		StreamingRegion:   strings.ToUpper(env("STREAMING_REGION", "US")),
+		MyServices:        list("MY_STREAMING_SERVICES"),
+		TrackerPull:       time.Duration(envInt("TRACKER_PULL_MINUTES", 60)) * time.Minute,
+		TrackerPullUser:   env("TRACKER_PULL_USER", ""),
+		EnvFile:           envFile,
 	}
 	c.ClzImportDir = env("CLZ_IMPORT_DIR", c.DataDir+"/import/clz")
+	c.StreamImportDir = env("STREAMING_IMPORT_DIR", c.DataDir+"/import/streaming")
 	c.Arr = loadArr()
 	c.MediaServers = loadMediaServers()
 	switch strings.ToLower(env("LOG_LEVEL", "info")) {
@@ -139,6 +163,42 @@ func Load() *Config {
 		c.PlexPoll = 5 * time.Second
 	}
 	return c
+}
+
+// loadEnvFile reads KEY=VALUE lines from ENV_FILE, or from backtrackarr.env in
+// the working directory or next to the program. Variables already set in the
+// environment win. This is how the Windows and Linux installs are configured.
+func loadEnvFile() string {
+	cands := []string{os.Getenv("ENV_FILE"), "backtrackarr.env"}
+	if exe, err := os.Executable(); err == nil {
+		cands = append(cands, filepath.Join(filepath.Dir(exe), "backtrackarr.env"))
+	}
+	for _, p := range cands {
+		if p == "" {
+			continue
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			k, v, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			k = strings.TrimSpace(strings.TrimPrefix(k, "export "))
+			v = strings.Trim(strings.TrimSpace(v), `"'`)
+			if _, set := os.LookupEnv(k); !set {
+				os.Setenv(k, v)
+			}
+		}
+		return p
+	}
+	return ""
 }
 
 func envBool(k string, def bool) bool {

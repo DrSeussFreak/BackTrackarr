@@ -19,6 +19,7 @@
     <input name="count" type="number" min="5" max="50" value="20" style="width:5em" title="How many">
     <input name="note" placeholder="Optional: “something light”, “80s sci-fi”…" style="flex:1;min-width:200px">
     <label class="small"><input type="checkbox" name="adult" value="1" {{if .Cfg.AIIncludeAdult}}checked{{end}}> include adult</label>
+    {{if .Cfg.MyServices}}<label class="small" title="In Plex or on {{range $i, $s := .Cfg.MyServices}}{{if $i}}, {{end}}{{$s}}{{end}}"><input type="checkbox" name="mine" value="1"> only what I can watch</label>{{end}}
     <button>Recommend</button>
   </form>
   <p class="muted small">Models: Claude <code>{{.Cfg.AnthropicModel}}</code>, Gemini <code>{{.Cfg.GeminiModel}}</code>. Your titles and ratings are sent to the provider you pick. “Include adult” also uses plays from private libraries; providers may still decline explicit titles.</p>
@@ -37,6 +38,7 @@
       <tr>
         <td><span class="tag {{if eq .Kind "movie"}}movie{{else}}episode{{end}}">{{.Kind}}</span><b>{{.Title}}</b>{{if .Year}} ({{.Year}}){{end}}
           {{if .InPlex}}<span class="tag" title="Already in your Plex library">in Plex</span>{{end}}
+          {{range .Providers}}<span class="tag {{if mine .}}ok{{end}}" title="Streams on {{.}}">{{.}}</span>{{end}}
           {{if .IMDB}}<a class="small" href="https://www.imdb.com/title/{{.IMDB}}/" target="_blank" rel="noopener">IMDb</a>{{end}}
           <div class="muted small">{{.Reason}}</div></td>
         <td class="nowrap">

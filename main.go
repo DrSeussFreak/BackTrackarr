@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,6 +25,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
+		fmt.Println(model.Version)
+		return
+	}
 	cfg := config.Load()
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck(cfg))
@@ -40,6 +45,7 @@ func run(cfg *config.Config, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	st.CompressBackups = cfg.BackupCompress
 	defer st.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -73,6 +79,10 @@ func run(cfg *config.Config, log *slog.Logger) error {
 		go eng.RunBackups(ctx)
 	}
 	go eng.RunCLZWatcher(ctx)
+	go eng.RunStreamWatcher(ctx)
+	if cfg.TrackerPull > 0 && (cfg.TraktClientID != "" || cfg.SimklClientID != "") {
+		go eng.RunTrackerPull(ctx)
+	}
 	if len(cfg.Arr) > 0 && cfg.ArrArchiveEvery > 0 {
 		go eng.RunArrArchiver(ctx)
 	}
@@ -97,6 +107,9 @@ func run(cfg *config.Config, log *slog.Logger) error {
 	}
 	if cfg.AdminPassword == "" {
 		log.Warn("ADMIN_PASSWORD is not set; the web UI is open to anyone who can reach it")
+	}
+	if cfg.EnvFile != "" {
+		log.Info("settings file loaded", "file", cfg.EnvFile)
 	}
 	log.Info("backtrackarr started", "version", model.Version, "listen", cfg.Listen, "data", cfg.DataDir,
 		"services", strings.Join(names, ","), "plex_server", px != nil, "plex_writes", cfg.PlexAllowWrites)

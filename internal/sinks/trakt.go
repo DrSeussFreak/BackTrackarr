@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -242,8 +243,9 @@ type traktHistoryItem struct {
 	} `json:"show"`
 }
 
-// ImportHistory pages through the user's entire Trakt history.
-func (t *Trakt) ImportHistory(ctx context.Context, fn func(model.Media, time.Time) error, report func(string)) error {
+// ImportHistory pages through the user's Trakt history, everything watched
+// after since (all of it when since is zero).
+func (t *Trakt) ImportHistory(ctx context.Context, since time.Time, fn func(model.Media, time.Time) error, report func(string)) error {
 	h, err := t.headers(ctx)
 	if err != nil {
 		return err
@@ -252,7 +254,11 @@ func (t *Trakt) ImportHistory(ctx context.Context, fn func(model.Media, time.Tim
 	for page := 1; ; page++ {
 		var res *result
 		for attempt := 0; ; attempt++ {
-			res, err = do(ctx, "GET", fmt.Sprintf("%s/sync/history?page=%d&limit=100&extended=full", traktAPI, page), h, nil)
+			u := fmt.Sprintf("%s/sync/history?page=%d&limit=100&extended=full", traktAPI, page)
+			if !since.IsZero() {
+				u += "&start_at=" + url.QueryEscape(since.UTC().Format(time.RFC3339))
+			}
+			res, err = do(ctx, "GET", u, h, nil)
 			if err == nil || StatusOf(err) != 429 || attempt >= 5 {
 				break
 			}

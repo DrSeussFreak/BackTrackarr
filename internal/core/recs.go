@@ -26,6 +26,7 @@ type RecRequest struct {
 	Count        int
 	IncludeAdult bool
 	Note         string // optional: "something light", "80s sci-fi"...
+	OnlyMine     bool   // keep only titles in Plex or on MY_STREAMING_SERVICES
 }
 
 func (e *Engine) AIProviders() []string {
@@ -248,6 +249,28 @@ func (e *Engine) filterRecs(ctx context.Context, in []aiRec, seen map[string]boo
 			IMDB: strings.TrimSpace(r.IMDB), TMDB: anyInt(r.TMDB), TVDB: anyInt(r.TVDB), InPlex: inPlex}
 		if !strings.HasPrefix(rec.IMDB, "tt") {
 			rec.IMDB = ""
+		}
+		if e.cfg.TMDBKey != "" {
+			id := rec.TMDB
+			if id == 0 {
+				if h, err := e.lookup(ctx, kind, rec.Title, rec.Year); err == nil && h != nil {
+					id = h.IDs.TMDB
+					rec.TMDB = id
+					if rec.IMDB == "" {
+						rec.IMDB = h.IDs.IMDB
+					}
+				}
+			}
+			rec.Providers, _ = e.WatchProviders(ctx, kind, id)
+		}
+		if req.OnlyMine && len(e.cfg.MyServices) > 0 && !rec.InPlex {
+			mine := false
+			for _, p := range rec.Providers {
+				mine = mine || e.IsMyService(p)
+			}
+			if !mine {
+				continue
+			}
 		}
 		out = append(out, rec)
 		if len(out) >= req.Count {
