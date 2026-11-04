@@ -36,7 +36,7 @@ jobs:
               cp deploy/windows/*.ps1 "$out/"
               (cd dist/stage && zip -qr "../backtrackarr_${name}.zip" "backtrackarr_${name}")
             else
-              cp deploy/linux/backtrackarr.service deploy/linux/install.sh "$out/" 2>/dev/null || true
+              cp deploy/linux/backtrackarr.service deploy/linux/install.sh deploy/linux/uninstall.sh "$out/"
               tar -C dist/stage -czf "dist/backtrackarr_${name}.tar.gz" "backtrackarr_${name}"
             fi
           }
