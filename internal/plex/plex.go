@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
 )
 
 var ErrNotFound = errors.New("plex: not found")
@@ -220,8 +220,8 @@ func (c *Client) get(ctx context.Context, p string, q url.Values) (*container, e
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Plex-Token", c.Token)
-	req.Header.Set("X-Plex-Client-Identifier", "backlottracker")
-	req.Header.Set("X-Plex-Product", "BacklotTracker")
+	req.Header.Set("X-Plex-Client-Identifier", "backtrackarr")
+	req.Header.Set("X-Plex-Product", "BackTrackarr")
 	req.Header.Set("X-Plex-Version", model.Version)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {

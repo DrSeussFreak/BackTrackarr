@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/plex"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 // Everything in this file writes to Plex. Each function refuses unless

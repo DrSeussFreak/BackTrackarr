@@ -6,13 +6,13 @@ COPY . .
 # go mod tidy resolves go.sum on first build; commit the generated go.sum afterwards.
 RUN go mod tidy && \
     go vet ./... && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/backlottracker . && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/backtrackarr . && \
     mkdir -p /out/data
 
 # ---- run ----
 # distroless/static: ~2 MB, includes CA certs and tzdata, runs as non-root.
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/backlottracker /backlottracker
+COPY --from=build /out/backtrackarr /backtrackarr
 COPY --from=build --chown=65532:65532 /out/data /data
 ENV DATA_DIR=/data \
     LISTEN=:8787 \
@@ -20,5 +20,5 @@ ENV DATA_DIR=/data \
     GOGC=50
 EXPOSE 8787
 VOLUME ["/data"]
-HEALTHCHECK --interval=60s --timeout=5s --start-period=10s CMD ["/backlottracker", "healthcheck"]
-ENTRYPOINT ["/backlottracker"]
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s CMD ["/backtrackarr", "healthcheck"]
+ENTRYPOINT ["/backtrackarr"]

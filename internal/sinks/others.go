@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
 )
 
 // ---------- Floppy (self-hosted, https://github.com/dannyvfilms/Floppy) ----------

@@ -1,4 +1,4 @@
-module github.com/DrSeussFreak/BacklotTracker
+module github.com/DrSeussFreak/BackTrackarr
 
 go 1.23
 

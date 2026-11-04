@@ -16,7 +16,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 // CLZ Comics exports a CSV (or tab/semicolon separated text) with whichever

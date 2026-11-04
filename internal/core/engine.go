@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/config"
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
-	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
-	"github.com/DrSeussFreak/BacklotTracker/internal/sinks"
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/config"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/plex"
+	"github.com/DrSeussFreak/BackTrackarr/internal/sinks"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 type Engine struct {

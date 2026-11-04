@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/config"
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/config"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
-// Sonarr, Radarr and Whisparr (any number of each). BacklotTracker archives their
+// Sonarr, Radarr and Whisparr (any number of each). BackTrackarr archives their
 // libraries and settings, and can add a recommended title to one of them.
 // Settings that hold credentials (download clients, indexers, notifications,
 // import lists) are deliberately not archived.

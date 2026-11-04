@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/config"
-	"github.com/DrSeussFreak/BacklotTracker/internal/core"
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
-	"github.com/DrSeussFreak/BacklotTracker/internal/sinks"
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/config"
+	"github.com/DrSeussFreak/BackTrackarr/internal/core"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/sinks"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 //go:embed templates/*.html static/*
@@ -136,7 +136,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			u, p, ok := r.BasicAuth()
 			if !ok || subtle.ConstantTimeCompare([]byte(u), []byte(s.cfg.AdminUser)) != 1 ||
 				subtle.ConstantTimeCompare([]byte(p), []byte(s.cfg.AdminPassword)) != 1 {
-				w.Header().Set("WWW-Authenticate", `Basic realm="backlottracker"`)
+				w.Header().Set("WWW-Authenticate", `Basic realm="backtrackarr"`)
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -494,7 +494,7 @@ func (s *Server) apiHistory(w http.ResponseWriter, r *http.Request) {
 // apiExport streams every play as newline-delimited JSON.
 func (s *Server) apiExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/x-ndjson")
-	w.Header().Set("Content-Disposition", `attachment; filename="backlottracker-export-`+time.Now().Format("20060102")+`.ndjson"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="backtrackarr-export-`+time.Now().Format("20060102")+`.ndjson"`)
 	enc := json.NewEncoder(w)
 	if err := s.st.ExportPlays(r.Context(), func(p store.PlayRow) error { return enc.Encode(p) }); err != nil {
 		s.log.Error("export", "err", err)

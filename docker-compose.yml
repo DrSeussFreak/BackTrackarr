@@ -1,8 +1,8 @@
 services:
-  backlottracker:
+  backtrackarr:
     build: .
-    image: backlottracker:latest
-    container_name: backlottracker
+    image: backtrackarr:latest
+    container_name: backtrackarr
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -10,7 +10,7 @@ services:
     environment:
       TZ: ${TZ:-UTC}
     volumes:
-      - backlottracker-data:/data
+      - backtrackarr-data:/data
     deploy:
       resources:
         limits:
@@ -18,4 +18,4 @@ services:
           cpus: "0.50"
 
 volumes:
-  backlottracker-data:
+  backtrackarr-data:

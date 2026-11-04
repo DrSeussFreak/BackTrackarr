@@ -12,14 +12,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/config"
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/config"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 type M = map[string]any
 
-var UserAgent = "BacklotTracker/" + model.Version
+var UserAgent = "BackTrackarr/" + model.Version
 
 // Sink is one destination service.
 type Sink interface {

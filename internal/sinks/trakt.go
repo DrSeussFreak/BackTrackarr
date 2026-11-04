@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 const traktAPI = "https://api.trakt.tv"

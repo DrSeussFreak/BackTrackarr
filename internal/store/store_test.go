@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
 )
 
 func openTest(t *testing.T) *Store {
@@ -130,6 +130,12 @@ func TestHistoryKeysetPaging(t *testing.T) {
 }
 
 func TestOldDatabaseNameIsMigrated(t *testing.T) {
+	for _, oldName := range oldDBNames {
+		t.Run(oldName, func(t *testing.T) { testOldName(t, oldName) })
+	}
+}
+
+func testOldName(t *testing.T, oldName string) {
 	dir := t.TempDir()
 	old, err := Open(dir)
 	if err != nil {
@@ -142,7 +148,7 @@ func TestOldDatabaseNameIsMigrated(t *testing.T) {
 	}
 	old.Close()
 	// pretend it was written by the earlier version
-	if err := os.Rename(filepath.Join(dir, "backlottracker.db"), filepath.Join(dir, "reelog.db")); err != nil {
+	if err := os.Rename(filepath.Join(dir, "backtrackarr.db"), filepath.Join(dir, oldName)); err != nil {
 		t.Fatal(err)
 	}
 	st, err := Open(dir)
@@ -150,7 +156,7 @@ func TestOldDatabaseNameIsMigrated(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	if _, err := os.Stat(filepath.Join(dir, "reelog.db")); err == nil {
+	if _, err := os.Stat(filepath.Join(dir, oldName)); err == nil {
 		t.Fatal("old file still there")
 	}
 	if got, _, _ := st.FindMedia(ctx, model.Media{Kind: model.Movie, IDs: model.IDs{IMDB: "tt0113277"}}); got.Title != "Heat" {
@@ -162,7 +168,7 @@ func TestOldDatabaseNameIsMigrated(t *testing.T) {
 // must open and keep every row.
 func TestMigrateFromV1(t *testing.T) {
 	dir := t.TempDir()
-	raw, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "backlottracker.db"))
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "backtrackarr.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

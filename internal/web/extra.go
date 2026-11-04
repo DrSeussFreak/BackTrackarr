@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/core"
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/core"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 func (s *Server) routesExtra(admin *http.ServeMux) {
@@ -234,7 +234,7 @@ func (s *Server) restoreFields(w http.ResponseWriter, r *http.Request) {
 }
 
 // apiLibraryExport streams the whole archive (items with full metadata, then
-// lists with their items) as NDJSON: a portable copy independent of BacklotTracker.
+// lists with their items) as NDJSON: a portable copy independent of BackTrackarr.
 func (s *Server) apiLibraryExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	w.Header().Set("Content-Type", "application/x-ndjson")

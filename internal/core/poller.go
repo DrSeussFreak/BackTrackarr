@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
-	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/plex"
 )
 
 type pollState struct {

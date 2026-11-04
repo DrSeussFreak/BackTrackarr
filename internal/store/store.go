@@ -25,7 +25,7 @@ import (
 
 	_ "modernc.org/sqlite" // pure Go, no CGO
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/model"
 )
 
 //go:embed schema.sql
@@ -57,7 +57,7 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, "backlottracker.db")
+	path := filepath.Join(dir, "backtrackarr.db")
 	migrateOldName(dir, path)
 	dsn := "file:" + path + "?_txlock=immediate" +
 		"&_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
@@ -766,12 +766,12 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := filepath.Join(dir, "backlottracker-"+time.Now().Format("20060102-150405")+".db")
+	name := filepath.Join(dir, "backtrackarr-"+time.Now().Format("20060102-150405")+".db")
 	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, name); err != nil {
 		return "", err
 	}
 	if keep > 0 {
-		files, _ := filepath.Glob(filepath.Join(dir, "backlottracker-*.db"))
+		files, _ := filepath.Glob(filepath.Join(dir, "backtrackarr-*.db"))
 		sort.Strings(files)
 		for len(files) > keep {
 			os.Remove(files[0])
@@ -781,20 +781,26 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 	return name, nil
 }
 
-// migrateOldName moves a database created under the app's earlier name
-// (reelog.db, with its WAL and shared-memory files) to the current name, so
+// oldDBNames are the database file names used by earlier names of the app.
+var oldDBNames = []string{"backlottracker.db", "reelog.db"}
+
+// migrateOldName moves a database created under one of the app's earlier
+// names (with its WAL and shared-memory files) to the current name, so
 // upgrading keeps all data. It does nothing if the new file already exists.
 func migrateOldName(dir, path string) {
-	old := filepath.Join(dir, "reelog.db")
 	if _, err := os.Stat(path); err == nil {
 		return
 	}
-	if _, err := os.Stat(old); err != nil {
-		return
-	}
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		if _, err := os.Stat(old + suffix); err == nil {
-			_ = os.Rename(old+suffix, path+suffix)
+	for _, name := range oldDBNames {
+		old := filepath.Join(dir, name)
+		if _, err := os.Stat(old); err != nil {
+			continue
 		}
+		for _, suffix := range []string{"", "-wal", "-shm"} {
+			if _, err := os.Stat(old + suffix); err == nil {
+				_ = os.Rename(old+suffix, path+suffix)
+			}
+		}
+		return
 	}
 }

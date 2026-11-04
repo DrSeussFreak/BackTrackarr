@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
-// AI recommendations: BacklotTracker sends a taste profile built from your ratings,
+// AI recommendations: BackTrackarr sends a taste profile built from your ratings,
 // rewatches and recent plays to Claude and/or Gemini (with your own API
 // keys) and keeps every run. Results you've already watched are dropped;
 // titles already in Plex are flagged.

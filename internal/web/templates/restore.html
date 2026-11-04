@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="head"><h1>Restore to Plex</h1><a class="btn ghost" href="/library">← Library</a></div>
-<p class="muted">Rebuild a new or reinstalled Plex server from the archive of the old one. First let BacklotTracker archive the new server (Library → Archive changes now) so items can be matched by GUID and file path.</p>
+<p class="muted">Rebuild a new or reinstalled Plex server from the archive of the old one. First let BackTrackarr archive the new server (Library → Archive changes now) so items can be matched by GUID and file path.</p>
 {{if not .Writes}}<p class="warn">Restoring writes to Plex, so it's off by default. Set <code>PLEX_ALLOW_WRITES=true</code> and restart. You can still preview below.</p>{{end}}
 
 <section class="panel">
