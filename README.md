@@ -1,4 +1,4 @@
-# Reelog
+# BacklotTracker
 
 A self-hosted, Trakt-style watch history for Plex. It records everything you
 watch, keeps it for decades, and forwards each play to Trakt, Simkl, Floppy,
@@ -60,7 +60,7 @@ they publish one, adding a sink is about 80 lines in
 in `RELAY_URLS`.
 
 **CrossWatch** is a sync engine itself. Point a relay at its Plex webhook,
-or let CrossWatch pull from Trakt/Simkl after Reelog has pushed to them.
+or let CrossWatch pull from Trakt/Simkl after BacklotTracker has pushed to them.
 
 ## How scrobbling works
 
@@ -74,14 +74,14 @@ Plex poller ──┘    + resolve IDs       └─► outbox ─► worker ─�
   `media.pause` to *pause*, and `media.stop` to *stop*. `media.scrobble` (or
   a stop at or above `WATCHED_PERCENT`) maps to *watched*, and `media.rate`
   to *rate*.
-- **After a play counts as watched:** Reelog ignores that session's later
+- **After a play counts as watched:** BacklotTracker ignores that session's later
   pause, resume, and stop events (for example, the credits), so services
   don't see a second watch.
 - **Duplicates:** a second play of the same item by the same user within 3
   hours is treated as a duplicate. This covers webhook + poller + import
   overlap.
 - **ID lookup:** Plex webhooks carry episode IDs but not show IDs. When
-  `PLEX_URL`/`PLEX_TOKEN` are set, Reelog asks Plex once per show and caches
+  `PLEX_URL`/`PLEX_TOKEN` are set, BacklotTracker asks Plex once per show and caches
   the result. Simkl and Floppy match episodes by show ID, so setting these
   is recommended.
 - **Who gets sent:** all users' plays are stored locally. Only `SCROBBLE_USERS`
@@ -92,7 +92,7 @@ Plex poller ──┘    + resolve IDs       └─► outbox ─► worker ─�
 
 ## Plex archive: never lose your library work
 
-Reelog keeps a **read-only** copy of your Plex server in its database:
+BacklotTracker keeps a **read-only** copy of your Plex server in its database:
 
 - **Every item:** movies, shows, seasons, episodes, artists, albums and
   tracks, with full metadata.
@@ -107,13 +107,13 @@ Reelog keeps a **read-only** copy of your Plex server in its database:
 Incremental archives run every `PLEX_ARCHIVE_MINUTES`, with a full sweep
 daily. **Library → Export archive** downloads everything as NDJSON.
 
-**Restoring after Plex dies:** point Reelog at the new server and let it
+**Restoring after Plex dies:** point BacklotTracker at the new server and let it
 archive once. Then open **Library → Restore**, pick the old server, preview
 the changes, and apply. This recreates every user's playlists and puts back
 sort titles, labels, collections and ratings. Restored fields are locked so a
 refresh won't undo them.
 
-**Reelog never changes Plex** unless you set `PLEX_ALLOW_WRITES=true`. Even
+**BacklotTracker never changes Plex** unless you set `PLEX_ALLOW_WRITES=true`. Even
 then, it only writes when you press a button (restore, copy). It only ever
 creates playlists or fills in fields; it never deletes anything.
 
@@ -135,7 +135,7 @@ turn that off in Pleazy *or* here, or you'll get double plays.
 
 ## "Mark as watched" and rewatches
 
-Pressing **Mark as watched** in Plex sends no webhook. Reelog notices it from
+Pressing **Mark as watched** in Plex sends no webhook. BacklotTracker notices it from
 Plex's `lastViewedAt` and records the play at that moment, the time of the
 press. Every play is its own row, so rewatches are always kept. The
 dashboard shows your most rewatched titles.
@@ -165,7 +165,7 @@ Sonarr, Radarr or Whisparr instance.
 
 ## Sonarr, Radarr, Whisparr
 
-Configure any number of each (`SONARR_URL`, `SONARR_2_URL`, …). Reelog
+Configure any number of each (`SONARR_URL`, `SONARR_2_URL`, …). BacklotTracker
 archives each instance's library and settings: quality profiles, custom
 formats, root folders, tags and naming. Credentials such as download clients
 and indexers are not archived.

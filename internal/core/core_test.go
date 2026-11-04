@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"reelog/internal/config"
-	"reelog/internal/plex"
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/config"
+	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 // fakePlex is a tiny Plex Media Server + plex.tv stand-in.

@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"reelog/internal/config"
-	"reelog/internal/model"
-	"reelog/internal/plex"
-	"reelog/internal/sinks"
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/config"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
+	"github.com/DrSeussFreak/BacklotTracker/internal/sinks"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 type Engine struct {

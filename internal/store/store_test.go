@@ -2,10 +2,13 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"reelog/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
 )
 
 func openTest(t *testing.T) *Store {
@@ -123,5 +126,78 @@ func TestHistoryKeysetPaging(t *testing.T) {
 	}
 	if len(seen) != n {
 		t.Fatalf("saw %d plays, want %d", len(seen), n)
+	}
+}
+
+func TestOldDatabaseNameIsMigrated(t *testing.T) {
+	dir := t.TempDir()
+	old, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	m := model.Media{Kind: model.Movie, Title: "Heat", IDs: model.IDs{IMDB: "tt0113277"}}
+	if err := old.UpsertMedia(ctx, &m); err != nil {
+		t.Fatal(err)
+	}
+	old.Close()
+	// pretend it was written by the earlier version
+	if err := os.Rename(filepath.Join(dir, "backlottracker.db"), filepath.Join(dir, "reelog.db")); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := os.Stat(filepath.Join(dir, "reelog.db")); err == nil {
+		t.Fatal("old file still there")
+	}
+	if got, _, _ := st.FindMedia(ctx, model.Media{Kind: model.Movie, IDs: model.IDs{IMDB: "tt0113277"}}); got.Title != "Heat" {
+		t.Fatalf("data lost in migration: %+v", got)
+	}
+}
+
+// A database from the first release (no music columns, no private flag)
+// must open and keep every row.
+func TestMigrateFromV1(t *testing.T) {
+	dir := t.TempDir()
+	raw, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "backlottracker.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE media (id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('movie','episode')), title TEXT NOT NULL,
+			year INTEGER, show_title TEXT, season INTEGER, episode INTEGER, duration_s INTEGER, imdb TEXT, tmdb INTEGER, tvdb INTEGER,
+			trakt INTEGER, show_imdb TEXT, show_tmdb INTEGER, show_tvdb INTEGER, show_trakt INTEGER, plex_guid TEXT, plex_key TEXT,
+			updated_at INTEGER NOT NULL)`,
+		`CREATE TABLE plays (id INTEGER PRIMARY KEY, media_id INTEGER NOT NULL REFERENCES media(id), user TEXT NOT NULL DEFAULT '',
+			watched_at INTEGER NOT NULL, source TEXT NOT NULL, player TEXT, UNIQUE (media_id, user, watched_at))`,
+		`INSERT INTO media(id,kind,title,year,imdb,updated_at) VALUES (7,'movie','Heat',1995,'tt0113277',0)`,
+		`INSERT INTO plays(media_id,user,watched_at,source) VALUES (7,'alice',1000,'old')`,
+	} {
+		if _, err := raw.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	raw.Close()
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	rows, err := st.History(ctx, HistoryQuery{})
+	if err != nil || len(rows) != 1 || rows[0].Media.Title != "Heat" || rows[0].Media.ID != 7 || rows[0].Private {
+		t.Fatalf("history after migration: %+v %v", rows, err)
+	}
+	tr := model.Media{Kind: model.Track, Title: "Song", ShowTitle: "Artist", Album: "Album"}
+	if err := st.UpsertMedia(ctx, &tr); err != nil {
+		t.Fatalf("tracks should be allowed after migration: %v", err)
+	}
+	var v int
+	st.DB.QueryRow(`PRAGMA user_version`).Scan(&v)
+	if v != schemaVersion {
+		t.Fatalf("user_version = %d", v)
 	}
 }

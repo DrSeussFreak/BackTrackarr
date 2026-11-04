@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"reelog/internal/model"
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 const traktAPI = "https://api.trakt.tv"

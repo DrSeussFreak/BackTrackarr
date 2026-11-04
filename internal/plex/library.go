@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"strings"
 
-	"reelog/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
 )
 
 // ErrReadOnly is returned by every call that would change something in Plex
-// while writes are disabled (the default). Reelog only reads from Plex unless
+// while writes are disabled (the default). BacklotTracker only reads from Plex unless
 // PLEX_ALLOW_WRITES=true, and even then only on an explicit button press.
 var ErrReadOnly = errors.New("plex: writes are disabled (set PLEX_ALLOW_WRITES=true to allow restore and copy)")
 
@@ -68,8 +68,8 @@ func (c *Client) request(ctx context.Context, method, p string, q url.Values) (*
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Plex-Token", c.Token)
-	req.Header.Set("X-Plex-Client-Identifier", "reelog")
-	req.Header.Set("X-Plex-Product", "Reelog")
+	req.Header.Set("X-Plex-Client-Identifier", "backlottracker")
+	req.Header.Set("X-Plex-Product", "BacklotTracker")
 	req.Header.Set("X-Plex-Version", model.Version)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
@@ -222,7 +222,7 @@ func (c *Client) MetadataRaw(ctx context.Context, keys []string) ([]json.RawMess
 	return rc.MediaContainer.Metadata, nil
 }
 
-// LibItem holds the fields Reelog pulls out of full Plex metadata.
+// LibItem holds the fields BacklotTracker pulls out of full Plex metadata.
 type LibItem struct {
 	RatingKey            string      `json:"ratingKey"`
 	Key                  string      `json:"key"`
@@ -425,8 +425,8 @@ func (c *Client) SharedUsers(ctx context.Context, machineID string) ([]SharedUse
 		return nil, err
 	}
 	req.Header.Set("X-Plex-Token", c.Token)
-	req.Header.Set("X-Plex-Client-Identifier", "reelog")
-	req.Header.Set("X-Plex-Product", "Reelog")
+	req.Header.Set("X-Plex-Client-Identifier", "backlottracker")
+	req.Header.Set("X-Plex-Product", "BacklotTracker")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err

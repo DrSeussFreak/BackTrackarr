@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"reelog/internal/model"
-	"reelog/internal/plex"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
 )
 
 type pollState struct {

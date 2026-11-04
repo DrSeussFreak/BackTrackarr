@@ -9,7 +9,7 @@ import (
 )
 
 // Comic is one issue from a CLZ Comics export. Raw keeps every column of the
-// export, so nothing is lost even for fields Reelog doesn't know about.
+// export, so nothing is lost even for fields BacklotTracker doesn't know about.
 type Comic struct {
 	ID          int64             `json:"id"`
 	ExtKey      string            `json:"ext_key"`

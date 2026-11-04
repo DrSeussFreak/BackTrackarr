@@ -12,14 +12,14 @@ import (
 	"net/http"
 	"time"
 
-	"reelog/internal/config"
-	"reelog/internal/model"
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/config"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 type M = map[string]any
 
-var UserAgent = "Reelog/" + model.Version
+var UserAgent = "BacklotTracker/" + model.Version
 
 // Sink is one destination service.
 type Sink interface {

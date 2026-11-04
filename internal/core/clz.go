@@ -16,7 +16,7 @@ import (
 	"time"
 	"unicode"
 
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 // CLZ Comics exports a CSV (or tab/semicolon separated text) with whichever

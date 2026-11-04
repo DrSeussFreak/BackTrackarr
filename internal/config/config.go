@@ -41,7 +41,7 @@ type Config struct {
 
 	BackupKeep int
 
-	// Plex archive and tools. Reelog only reads from Plex unless PlexAllowWrites.
+	// Plex archive and tools. BacklotTracker only reads from Plex unless PlexAllowWrites.
 	PlexAllowWrites  bool
 	PlexArchiveEvery time.Duration // incremental archive of metadata, playlists, collections
 	PlexWatchScan    time.Duration // detects "mark as watched" presses

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"reelog/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
 )
 
 const webhookEpisode = `{

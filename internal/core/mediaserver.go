@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"reelog/internal/config"
-	"reelog/internal/plex"
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/config"
+	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 // Copying Plex playlists and collections to Jellyfin or Emby, so they show
@@ -36,7 +36,7 @@ func (m msClient) do(ctx context.Context, method, p string, q url.Values, out an
 		return err
 	}
 	req.Header.Set("X-Emby-Token", m.srv.APIKey)
-	req.Header.Set("Authorization", `MediaBrowser Client="Reelog", Device="Reelog", DeviceId="reelog", Version="1", Token="`+m.srv.APIKey+`"`)
+	req.Header.Set("Authorization", `MediaBrowser Client="BacklotTracker", Device="BacklotTracker", DeviceId="backlottracker", Version="1", Token="`+m.srv.APIKey+`"`)
 	req.Header.Set("Accept", "application/json")
 	resp, err := msHTTP.Do(req)
 	if err != nil {

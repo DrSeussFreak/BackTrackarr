@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"reelog/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
 )
 
 // ---------- Floppy (self-hosted, https://github.com/dannyvfilms/Floppy) ----------

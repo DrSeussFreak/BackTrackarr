@@ -25,7 +25,7 @@ import (
 
 	_ "modernc.org/sqlite" // pure Go, no CGO
 
-	"reelog/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
 )
 
 //go:embed schema.sql
@@ -57,7 +57,8 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, "reelog.db")
+	path := filepath.Join(dir, "backlottracker.db")
+	migrateOldName(dir, path)
 	dsn := "file:" + path + "?_txlock=immediate" +
 		"&_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
 		"&_pragma=foreign_keys(ON)&_pragma=cache_size(-8000)&_pragma=temp_store(MEMORY)"
@@ -67,6 +68,10 @@ func Open(dir string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(4)
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
 	for _, stmt := range strings.Split(schema, ";\n") {
 		if strings.TrimSpace(stmt) == "" {
 			continue
@@ -75,6 +80,10 @@ func Open(dir string) (*Store, error) {
 			db.Close()
 			return nil, fmt.Errorf("schema: %w\n%s", err, stmt)
 		}
+	}
+	if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
+		db.Close()
+		return nil, err
 	}
 	return &Store{DB: db, dir: dir}, nil
 }
@@ -757,12 +766,12 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := filepath.Join(dir, "reelog-"+time.Now().Format("20060102-150405")+".db")
+	name := filepath.Join(dir, "backlottracker-"+time.Now().Format("20060102-150405")+".db")
 	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, name); err != nil {
 		return "", err
 	}
 	if keep > 0 {
-		files, _ := filepath.Glob(filepath.Join(dir, "reelog-*.db"))
+		files, _ := filepath.Glob(filepath.Join(dir, "backlottracker-*.db"))
 		sort.Strings(files)
 		for len(files) > keep {
 			os.Remove(files[0])
@@ -770,4 +779,22 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 		}
 	}
 	return name, nil
+}
+
+// migrateOldName moves a database created under the app's earlier name
+// (reelog.db, with its WAL and shared-memory files) to the current name, so
+// upgrading keeps all data. It does nothing if the new file already exists.
+func migrateOldName(dir, path string) {
+	old := filepath.Join(dir, "reelog.db")
+	if _, err := os.Stat(path); err == nil {
+		return
+	}
+	if _, err := os.Stat(old); err != nil {
+		return
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if _, err := os.Stat(old + suffix); err == nil {
+			_ = os.Rename(old+suffix, path+suffix)
+		}
+	}
 }

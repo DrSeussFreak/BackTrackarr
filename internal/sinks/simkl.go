@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"reelog/internal/model"
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 const simklAPI = "https://api.simkl.com"
@@ -39,7 +39,7 @@ func (s *Simkl) url(p string) string {
 		sep = "&"
 	}
 	return simklAPI + p + sep + "client_id=" + url.QueryEscape(s.ClientID) +
-		"&app-name=reelog&app-version=" + url.QueryEscape(model.Version)
+		"&app-name=backlottracker&app-version=" + url.QueryEscape(model.Version)
 }
 
 func (s *Simkl) StartAuth(ctx context.Context) (*DeviceCode, error) {

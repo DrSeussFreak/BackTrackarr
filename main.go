@@ -1,4 +1,4 @@
-// Reelog: a self-hosted, Trakt-style watch history that scrobbles from Plex
+// BacklotTracker: a self-hosted, Trakt-style watch history that scrobbles from Plex
 // and forwards to Trakt, Simkl, Floppy and anything that accepts Plex webhooks.
 package main
 
@@ -14,13 +14,13 @@ import (
 	"time"
 	_ "time/tzdata" // correct local times in minimal containers
 
-	"reelog/internal/config"
-	"reelog/internal/core"
-	"reelog/internal/model"
-	"reelog/internal/plex"
-	"reelog/internal/sinks"
-	"reelog/internal/store"
-	"reelog/internal/web"
+	"github.com/DrSeussFreak/BacklotTracker/internal/config"
+	"github.com/DrSeussFreak/BacklotTracker/internal/core"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
+	"github.com/DrSeussFreak/BacklotTracker/internal/sinks"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/web"
 )
 
 func main() {
@@ -98,7 +98,7 @@ func run(cfg *config.Config, log *slog.Logger) error {
 	if cfg.AdminPassword == "" {
 		log.Warn("ADMIN_PASSWORD is not set; the web UI is open to anyone who can reach it")
 	}
-	log.Info("reelog started", "version", model.Version, "listen", cfg.Listen, "data", cfg.DataDir,
+	log.Info("backlottracker started", "version", model.Version, "listen", cfg.Listen, "data", cfg.DataDir,
 		"services", strings.Join(names, ","), "plex_server", px != nil, "plex_writes", cfg.PlexAllowWrites)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err

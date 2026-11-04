@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · Reelog</title>
+<title>{{.Title}} · BacklotTracker</title>
 <link rel="stylesheet" href="/static/app.css">
 {{if .Refresh}}<meta http-equiv="refresh" content="4">{{end}}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/">Reelog</a>
+  <a class="brand" href="/">BacklotTracker</a>
   <nav>
     <a href="/" {{if eq .Nav "dash"}}class="on"{{end}}>Dashboard</a>
     <a href="/history" {{if eq .Nav "history"}}class="on"{{end}}>History</a>

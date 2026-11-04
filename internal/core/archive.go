@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
-	"reelog/internal/model"
-	"reelog/internal/plex"
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/model"
+	"github.com/DrSeussFreak/BacklotTracker/internal/plex"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
 // The archiver keeps a read-only copy of the Plex library: every movie,
@@ -21,7 +21,7 @@ import (
 
 var errStop = errors.New("stop")
 
-// PlexUser is a Plex account Reelog can read as.
+// PlexUser is a Plex account BacklotTracker can read as.
 type PlexUser struct {
 	Name   string
 	Owner  bool

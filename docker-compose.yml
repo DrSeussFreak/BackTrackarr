@@ -1,8 +1,8 @@
 services:
-  reelog:
+  backlottracker:
     build: .
-    image: reelog:latest
-    container_name: reelog
+    image: backlottracker:latest
+    container_name: backlottracker
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -10,7 +10,7 @@ services:
     environment:
       TZ: ${TZ:-UTC}
     volumes:
-      - reelog-data:/data
+      - backlottracker-data:/data
     deploy:
       resources:
         limits:
@@ -18,4 +18,4 @@ services:
           cpus: "0.50"
 
 volumes:
-  reelog-data:
+  backlottracker-data:

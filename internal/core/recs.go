@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"reelog/internal/store"
+	"github.com/DrSeussFreak/BacklotTracker/internal/store"
 )
 
-// AI recommendations: Reelog sends a taste profile built from your ratings,
+// AI recommendations: BacklotTracker sends a taste profile built from your ratings,
 // rewatches and recent plays to Claude and/or Gemini (with your own API
 // keys) and keeps every run. Results you've already watched are dropped;
 // titles already in Plex are flagged.

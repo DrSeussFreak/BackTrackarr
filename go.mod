@@ -1,4 +1,4 @@
-module reelog
+module github.com/DrSeussFreak/BacklotTracker
 
 go 1.23
 
