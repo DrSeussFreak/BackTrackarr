@@ -511,7 +511,6 @@ func (s *Store) computeStats(ctx context.Context, user string) (*Stats, error) {
 	return st, nil
 }
 
-
 func (s *Store) nameCounts(ctx context.Context, q string, args ...any) ([]NameCount, error) {
 	rows, err := s.DB.QueryContext(ctx, q, args...)
 	if err != nil {

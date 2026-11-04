@@ -116,5 +116,5 @@ type Event struct {
 	At       time.Time       `json:"at"`
 	Source   string          `json:"source"`
 	Private  bool            `json:"private,omitempty"` // from a private library: stored, never sent
-	Raw      json.RawMessage `json:"raw,omitempty"` // original Plex webhook JSON, used only by relay sinks
+	Raw      json.RawMessage `json:"raw,omitempty"`     // original Plex webhook JSON, used only by relay sinks
 }
