@@ -1,0 +1,55 @@
+{{define "content"}}
+{{with .L}}
+<div class="head"><h1>{{.Title}}</h1>
+  <div class="row"><a class="btn ghost" href="/library">← Library</a><a class="btn ghost" href="/library/lists/{{.ID}}/m3u">Download M3U</a></div>
+</div>
+<p class="muted">{{.Kind}}{{if .ListType}} · {{.ListType}}{{end}}{{if .Owner}} · owned by <b>{{.Owner}}</b>{{end}}
+  {{if .Smart}} · <span class="tag movie">smart</span>{{end}} · {{num (i64 .ItemCount)}} items · server <code>{{.ServerID}}</code>
+  {{if .DeletedAt}} · <span class="bad">deleted in Plex {{ts .DeletedAt}}</span>{{end}} · {{$.Versions}} earlier versions kept</p>
+{{if .Summary}}<p>{{.Summary}}</p>{{end}}
+{{if .Smart}}<p class="muted small">Smart filter: <code>{{.Content}}</code></p>{{end}}
+{{end}}
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Copy to a Plex user</h2>
+    {{if not .Writes}}<p class="warn small">Copying writes to Plex, so it's off by default. Set <code>PLEX_ALLOW_WRITES=true</code> to enable it. Copies are always new playlists; nothing is replaced or deleted.</p>{{end}}
+    <form method="post" action="/library/lists/{{.L.ID}}/copy" class="row">
+      <select name="user" required>{{range .PlexUsers}}<option>{{.}}</option>{{end}}</select>
+      <input name="title" placeholder="{{.L.Title}}" title="New playlist name">
+      {{if and .L.Smart (eq .L.Kind "playlist")}}<label class="small"><input type="checkbox" name="static" value="1"> copy current items instead of the smart filter</label>{{end}}
+      <button {{if not .Writes}}disabled{{end}}>Copy</button>
+    </form>
+    <p class="muted small">{{if eq .L.Kind "collection"}}Collections are shared by everyone who can see the library; this makes a playlist with the collection's items.{{else if .L.Smart}}Smart playlists stay smart: the filter is copied, so the new playlist keeps updating.{{end}}</p>
+  </section>
+  <section class="panel">
+    <h2>Copy to Jellyfin / Emby (for Pleazy)</h2>
+    {{if .MediaServers}}
+      {{range .MediaServers}}
+      <form method="post" action="/library/lists/{{$.L.ID}}/copy-ms" class="row">
+        <input type="hidden" name="server" value="{{.Name}}">
+        <b>{{.Name}}</b>
+        {{if .Err}}<span class="bad small">{{.Err}}</span>{{else}}
+        <select name="user" required>{{range .Users}}<option>{{.}}</option>{{end}}</select>
+        <input name="title" placeholder="{{$.L.Title}}">
+        <button>Copy</button>{{end}}
+      </form>
+      {{end}}
+      <p class="muted small">Items are matched by IMDb/TMDb/TVDB/MusicBrainz id, then by file name. Smart playlists are copied as their current items (Jellyfin and Emby have no smart playlists). Pleazy connected to Plex already shows Plex playlists, no copy needed.</p>
+    {{else}}<p class="muted">Set <code>JELLYFIN_URL</code> and <code>JELLYFIN_API_KEY</code> (or <code>EMBY_…</code>) to copy playlists there. Pleazy connected to Plex already shows Plex playlists.</p>{{end}}
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Items</h2>
+  <table>
+    <thead><tr><th>#</th><th>Title</th><th>File</th></tr></thead>
+    <tbody>
+    {{range .L.Items}}<tr><td class="mono muted">{{inc .Position}}</td><td><span class="tag">{{.Type}}</span>{{.Title}}</td><td class="mono small muted">{{.File}}</td></tr>
+    {{else}}<tr><td colspan="3" class="muted">Empty.</td></tr>{{end}}
+    </tbody>
+  </table>
+</section>
+
+{{template "jobs" .Jobs}}
+{{end}}

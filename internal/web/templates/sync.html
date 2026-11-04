@@ -1,0 +1,77 @@
+{{define "content"}}
+<div class="head"><h1>Sync</h1></div>
+
+<section class="panel">
+  <h2>Plex</h2>
+  <p>In Plex: <b>Settings → Webhooks → Add Webhook</b> (needs Plex Pass), and paste:</p>
+  <p><code class="copy">{{.WebhookURL}}</code></p>
+  <p class="muted">No Plex Pass? Set <code>PLEX_URL</code>, <code>PLEX_TOKEN</code> and <code>PLEX_POLL_SECONDS=10</code> to watch sessions instead.
+  {{if .HasPlex}}Plex server: <b>connected</b>{{if gt .Cfg.PlexPoll 0}}, polling every {{.Cfg.PlexPoll}}{{end}}.{{else}}Plex server: not configured (episode show IDs and history import need it).{{end}}</p>
+  <p class="muted">Sent to external services:
+    {{if .Cfg.ScrobbleUsers}}{{range $i, $u := .Cfg.ScrobbleUsers}}{{if $i}}, {{end}}<b>{{$u}}</b>{{end}}{{else}}the server owner only{{end}}.
+    Every user's plays are still stored here. Watched at ≥ {{.Cfg.WatchedPercent}}%.</p>
+</section>
+
+<section class="panel">
+  <h2>Services</h2>
+  <table class="sinks">
+    <thead><tr><th>Service</th><th>Status</th><th>Queue</th><th>Last sent</th><th>Actions</th></tr></thead>
+    <tbody>
+    {{range .Sinks}}
+      <tr>
+        <td><b>{{.Label}}</b><div class="muted mono small">{{.Name}}</div></td>
+        <td>
+          {{if .Ready}}<span class="ok">● connected</span>{{else}}<span class="warn">● not connected</span>{{end}}
+          {{with .Auth}}
+            {{if .Done}}<div class="ok small">Authorized.</div>
+            {{else if .Err}}<div class="bad small">{{.Err}}</div>
+            {{else}}<div class="authbox">Go to <a href="{{.Code.VerificationURL}}" target="_blank" rel="noopener">{{.Code.VerificationURL}}</a> and enter <code class="big">{{.Code.UserCode}}</code><div class="muted small">Waiting…</div></div>{{end}}
+          {{end}}
+        </td>
+        <td class="mono">{{num .Stats.Pending}} pending{{if .Stats.Failed}}<br><span class="bad">{{num .Stats.Failed}} failed</span>{{end}}
+          {{if .Stats.LastError}}<div class="muted small" title="{{.Stats.LastError}}">last error: {{printf "%.80s" .Stats.LastError}}</div>{{end}}</td>
+        <td class="mono small">{{ts .Stats.LastOK}}</td>
+        <td class="actions">
+          {{if .CanAuth}}
+            {{if .Ready}}<form method="post" action="/sync/{{.Name}}/disconnect"><button class="ghost">Disconnect</button></form>
+            {{else}}<form method="post" action="/sync/{{.Name}}/connect"><button>Connect</button></form>{{end}}
+          {{end}}
+          {{if and .Ready (ne .Kind "relay")}}
+            <form method="post" action="/sync/{{.Name}}/push" onsubmit="return confirm('Send ALL of this user\'s local history to {{.Label}}?')">
+              <input name="user" value="{{$.DefaultUser}}" size="10" title="Local user whose history to send">
+              <button class="ghost">Push history</button>
+            </form>
+          {{end}}
+          {{if .Stats.Failed}}<form method="post" action="/sync/{{.Name}}/retry"><button class="ghost">Retry failed</button></form>{{end}}
+        </td>
+      </tr>
+    {{else}}
+      <tr><td colspan="5" class="muted">No services configured. Set environment variables (see README) and restart.</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{if .Missing}}<p class="muted small">Not configured: {{range $i, $m := .Missing}}{{if $i}}, {{end}}{{$m}}{{end}}.</p>{{end}}
+</section>
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Import</h2>
+    <form method="post" action="/import/plex" class="row">
+      <button {{if not .HasPlex}}disabled{{end}}>Import Plex watch history</button>
+      <span class="muted small">Reads every play your Plex server remembers. Safe to re-run; duplicates are skipped.</span>
+    </form>
+    <form method="post" action="/import/trakt" class="row">
+      <input name="user" value="{{.DefaultUser}}" size="12" placeholder="local user" required>
+      <button>Import Trakt history</button>
+      <span class="muted small">Needs Trakt connected.</span>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Data</h2>
+    <form method="post" action="/backup" class="row"><button>Back up now</button><span class="muted small">Snapshot to /data/backups (daily automatically, keeps {{.Cfg.BackupKeep}}).</span></form>
+    <p class="row"><a class="btn ghost" href="/api/export">Export all plays (NDJSON)</a></p>
+  </section>
+</div>
+
+{{template "jobs" .Jobs}}
+{{end}}

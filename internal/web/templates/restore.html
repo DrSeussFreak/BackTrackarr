@@ -1,0 +1,46 @@
+{{define "content"}}
+<div class="head"><h1>Restore to Plex</h1><a class="btn ghost" href="/library">← Library</a></div>
+<p class="muted">Rebuild a new or reinstalled Plex server from the archive of the old one. First let Reelog archive the new server (Library → Archive changes now) so items can be matched by GUID and file path.</p>
+{{if not .Writes}}<p class="warn">Restoring writes to Plex, so it's off by default. Set <code>PLEX_ALLOW_WRITES=true</code> and restart. You can still preview below.</p>{{end}}
+
+<section class="panel">
+  <h2>1. Choose the old server</h2>
+  <form method="get" class="row">
+    <select name="from" required>
+      {{$f := .From}}{{$m := .Machine}}
+      {{range .Servers}}<option value="{{.}}" {{if eq . $f}}selected{{end}}>{{.}}{{if eq . $m}} (current server){{end}}</option>{{end}}
+    </select>
+    <button class="ghost">Preview</button>
+  </form>
+</section>
+
+{{if .From}}
+<section class="panel">
+  <h2>2. Playlists</h2>
+  <form method="post" action="/library/restore/playlists" class="row">
+    <input type="hidden" name="from" value="{{.From}}">
+    <button {{if not .Writes}}disabled{{end}}>Recreate all playlists</button>
+    <span class="muted small">For each user, every playlist that doesn't already exist on the current server (smart playlists keep their filter).</span>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>3. Custom fields ({{num (i64 .PlanCount)}} changes)</h2>
+  {{if .PlanErr}}<p class="bad">{{.PlanErr}}</p>{{end}}
+  {{if .Plan}}
+  <form method="post" action="/library/restore/fields" class="row" onsubmit="return confirm('Write {{.PlanCount}} changes to Plex?')">
+    <input type="hidden" name="from" value="{{.From}}">
+    <button {{if not .Writes}}disabled{{end}}>Apply all</button>
+    <span class="muted small">Restored fields are locked so a metadata refresh won't undo them. Fields already locked on the new server are left alone.</span>
+  </form>
+  <table>
+    <thead><tr><th>Item</th><th>Field</th><th>Now</th><th>Restored</th></tr></thead>
+    <tbody>{{range .Plan}}<tr><td><span class="tag">{{.Type}}</span>{{.Title}}</td><td>{{.Field}}</td><td class="muted">{{.From}}</td><td>{{.To}}</td></tr>{{end}}</tbody>
+  </table>
+  {{if gt .PlanCount 200}}<p class="muted small">Showing the first 200.</p>{{end}}
+  {{else if not .PlanErr}}<p class="muted">Nothing to restore: every archived custom value is already on the current server{{if eq .From .Machine}} (this is the current server){{end}}.</p>{{end}}
+</section>
+{{end}}
+
+{{template "jobs" .Jobs}}
+{{end}}

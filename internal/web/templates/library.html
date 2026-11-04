@@ -1,0 +1,99 @@
+{{define "content"}}
+<div class="head"><h1>Library archive</h1>
+  <div class="row">
+    <a class="btn ghost" href="/library/restore">Restore…</a>
+    <a class="btn ghost" href="/api/library/export">Export archive (NDJSON)</a>
+  </div>
+</div>
+<p class="muted">A read-only copy of your Plex server: every item with its hand-edited fields (sort title, original title, edition, labels, collections, locks), every user's playlists, and every collection. Earlier versions are kept, and deleted items are marked, never removed.</p>
+
+<section class="panel">
+  <h2>Plex</h2>
+  {{if not .HasPlex}}<p class="warn">Set <code>PLEX_URL</code> and <code>PLEX_TOKEN</code> to archive your server.</p>{{else}}
+  <p class="row">
+    <span class="muted">Server <code>{{.Machine}}</code> · last run {{ts .LastRun}} · last full sweep {{ts .LastFull}}</span>
+  </p>
+  <div class="row">
+    <form method="post" action="/library/archive" class="inline"><button>Archive changes now</button></form>
+    <form method="post" action="/library/archive" class="inline"><input type="hidden" name="full" value="1"><button class="ghost">Full sweep</button></form>
+    <span class="muted small">Automatic every {{.Cfg.PlexArchiveEvery}}, full sweep daily. Plex is only read{{if .Cfg.PlexAllowWrites}}; writes are enabled for restore and copy{{end}}.</span>
+  </div>
+  {{end}}
+  <table>
+    <thead><tr><th>Library</th><th>Items</th><th>Deleted</th></tr></thead>
+    <tbody>
+    {{range .Sum.Sections}}
+      <tr><td><b>{{.Title}}</b> <span class="muted mono small">{{.ServerID}}</span></td>
+        <td class="small">{{range $t, $n := .Counts}}<span class="tag">{{$t}}</span>{{num $n}} {{end}}</td>
+        <td class="mono">{{num .Deleted}}</td></tr>
+    {{else}}<tr><td colspan="3" class="muted">Nothing archived yet.</td></tr>{{end}}
+    </tbody>
+  </table>
+  <p class="muted small">{{num .Sum.Playlists}} playlists · {{num .Sum.Collections}} collections · {{num .Sum.Versions}} earlier versions kept</p>
+</section>
+
+<section class="panel">
+  <h2>Find an item</h2>
+  <form method="get" class="filters">
+    <input type="search" name="q" value="{{.IQ.Search}}" placeholder="Title, sort title, original title, show">
+    <select name="type">
+      <option value="">Any type</option>
+      {{$t := .IQ.Type}}
+      {{range $x := (list "movie" "show" "season" "episode" "artist" "album" "track")}}<option value="{{$x}}" {{if eq $x $t}}selected{{end}}>{{$x}}</option>{{end}}
+    </select>
+    <button>Search</button>
+  </form>
+  {{if .Items}}
+  <table>
+    <thead><tr><th>Title</th><th>Sort title</th><th>Original / edition</th><th>Labels · collections</th><th>Locked</th></tr></thead>
+    <tbody>
+    {{range .Items}}
+      <tr {{if .DeletedAt}}class="muted"{{end}}>
+        <td><span class="tag">{{.Type}}</span>{{if .GrandparentTitle}}{{.GrandparentTitle}} · {{end}}{{.Title}}{{if .Year}} ({{.Year}}){{end}}{{if .DeletedAt}} <span class="bad small">deleted</span>{{end}}
+          <div class="muted small mono">{{.File}}</div></td>
+        <td>{{.TitleSort}}</td>
+        <td>{{.OriginalTitle}}{{if .Edition}} · {{.Edition}}{{end}}</td>
+        <td class="small">{{range .Labels}}<span class="tag">{{.}}</span>{{end}}{{range .Collections}}<span class="tag episode">{{.}}</span>{{end}}</td>
+        <td class="small muted">{{range $i, $f := .Locked}}{{if $i}}, {{end}}{{$f}}{{end}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{if .HasMore}}<p class="pager"><a class="btn" href="?q={{.IQ.Search}}&type={{.IQ.Type}}&offset={{.Next}}">More →</a></p>{{end}}
+  {{end}}
+</section>
+
+<section class="panel">
+  <h2>Playlists and collections</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Kind</th><th>Owner</th><th>Items</th><th>Last seen</th></tr></thead>
+    <tbody>
+    {{range .Lists}}
+      <tr {{if .DeletedAt}}class="muted"{{end}}>
+        <td><a href="/library/lists/{{.ID}}">{{.Title}}</a>{{if .Smart}} <span class="tag movie">smart</span>{{end}}{{if .DeletedAt}} <span class="bad small">deleted in Plex</span>{{end}}</td>
+        <td>{{.Kind}}{{if .ListType}} · {{.ListType}}{{end}}</td>
+        <td>{{if .Owner}}{{.Owner}}{{else}}<span class="muted">library</span>{{end}}</td>
+        <td class="mono">{{num (i64 .ItemCount)}}</td>
+        <td class="mono small">{{ts .SeenAt}}</td>
+      </tr>
+    {{else}}<tr><td colspan="5" class="muted">No playlists or collections archived yet.</td></tr>{{end}}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Sonarr / Radarr / Whisparr</h2>
+  {{if .Arr}}
+  <table>
+    <thead><tr><th>Instance</th><th>Type</th><th>Archived titles</th></tr></thead>
+    <tbody>
+    {{$sum := .Sum}}
+    {{range .Arr}}<tr><td><b>{{.Name}}</b> <span class="muted small">{{.URL}}</span></td><td>{{.Kind}}{{if .Adult}} <span class="tag private">adult</span>{{end}}</td><td class="mono">{{num (index $sum.ArrItems .Name)}}</td></tr>{{end}}
+    </tbody>
+  </table>
+  <form method="post" action="/library/arr" class="row"><button class="ghost">Archive now</button><span class="muted small">Library, quality profiles, custom formats, root folders, tags and naming are kept. Credentials (download clients, indexers) are not.</span></form>
+  {{else}}<p class="muted">None configured. Set <code>SONARR_URL</code>/<code>SONARR_API_KEY</code>, <code>RADARR_URL</code>/<code>RADARR_API_KEY</code>, <code>WHISPARR_URL</code>/<code>WHISPARR_API_KEY</code> (add <code>_2_</code>, <code>_3_</code>… for more instances).</p>{{end}}
+</section>
+
+{{template "jobs" .Jobs}}
+{{end}}

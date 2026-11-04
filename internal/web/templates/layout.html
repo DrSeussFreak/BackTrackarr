@@ -1,0 +1,68 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Reelog</title>
+<link rel="stylesheet" href="/static/app.css">
+{{if .Refresh}}<meta http-equiv="refresh" content="4">{{end}}
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Reelog</a>
+  <nav>
+    <a href="/" {{if eq .Nav "dash"}}class="on"{{end}}>Dashboard</a>
+    <a href="/history" {{if eq .Nav "history"}}class="on"{{end}}>History</a>
+    <a href="/library" {{if eq .Nav "library"}}class="on"{{end}}>Library</a>
+    <a href="/comics" {{if eq .Nav "comics"}}class="on"{{end}}>Comics</a>
+    <a href="/recs" {{if eq .Nav "recs"}}class="on"{{end}}>For you</a>
+    <a href="/sync" {{if eq .Nav "sync"}}class="on"{{end}}>Sync</a>
+  </nav>
+</header>
+<main>
+{{with .Flash}}<p class="flash">{{.}}</p>{{end}}
+{{template "content" .}}
+</main>
+</body>
+</html>{{end}}
+
+{{define "userpicker"}}
+<form method="get" class="inline">
+  <select name="user" onchange="this.form.submit()">
+    <option value="">All users</option>
+    {{$cur := .User}}
+    {{range .Users}}<option value="{{.Name}}" {{if eq .Name $cur}}selected{{end}}>{{.Name}} ({{num .Count}})</option>{{end}}
+  </select>
+</form>
+{{end}}
+
+{{define "jobs"}}
+{{if .}}
+<section class="panel">
+  <h2>Jobs</h2>
+  <table>
+    {{range .}}<tr><td><b>{{.Name}}</b></td><td>{{if .Running}}<span class="warn">running</span>{{else if .Err}}<span class="bad">failed</span>{{else}}<span class="ok">done</span>{{end}}</td>
+    <td>{{.Message}}{{if .Err}}<div class="bad small">{{.Err}}</div>{{end}}</td><td class="mono small">{{.Updated.Format "15:04:05"}}</td></tr>{{end}}
+  </table>
+</section>
+{{end}}
+{{end}}
+
+{{define "playtable"}}
+<table class="plays">
+  <thead><tr><th>Watched</th><th>Title</th><th>User</th><th>Source</th><th></th></tr></thead>
+  <tbody>
+  {{range .}}
+    <tr>
+      <td class="nowrap mono">{{ts .WatchedAt}}</td>
+      <td><span class="tag {{.Media.Kind}}">{{.Media.Kind}}</span>{{if .Private}}<span class="tag private" title="Private library: never sent to other services">private</span>{{end}} {{display .Media}}</td>
+      <td>{{.User}}</td>
+      <td class="muted">{{.Source}}{{if .Player}} · {{.Player}}{{end}}</td>
+      <td><form method="post" action="/plays/{{.ID}}/delete" onsubmit="return confirm('Delete this play from local history?')"><button class="link" title="Delete">✕</button></form></td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5" class="muted">Nothing here yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}

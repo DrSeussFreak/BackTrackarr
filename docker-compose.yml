@@ -1,0 +1,21 @@
+services:
+  reelog:
+    build: .
+    image: reelog:latest
+    container_name: reelog
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    env_file: .env
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - reelog-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.50"
+
+volumes:
+  reelog-data:

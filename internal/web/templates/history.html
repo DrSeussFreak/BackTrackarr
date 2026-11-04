@@ -1,0 +1,24 @@
+{{define "content"}}
+<div class="head"><h1>History</h1></div>
+<form method="get" class="filters">
+  <input type="search" name="q" value="{{.Q.Search}}" placeholder="Search titles">
+  <select name="kind">
+    <option value="">Everything</option>
+    <option value="movie" {{if eq .Q.Kind "movie"}}selected{{end}}>Movies</option>
+    <option value="episode" {{if eq .Q.Kind "episode"}}selected{{end}}>Episodes</option>
+    <option value="track" {{if eq .Q.Kind "track"}}selected{{end}}>Music</option>
+  </select>
+  <select name="user">
+    <option value="">All users</option>
+    {{$cur := .Q.User}}
+    {{range .Users}}<option value="{{.Name}}" {{if eq .Name $cur}}selected{{end}}>{{.Name}}</option>{{end}}
+  </select>
+  <button>Filter</button>
+</form>
+<section class="panel">
+  {{template "playtable" .Rows}}
+  {{if .Next}}
+  <p class="pager"><a class="btn" href="?q={{.Q.Search}}&kind={{.Q.Kind}}&user={{.Q.User}}&before={{.Next}}">Older →</a></p>
+  {{end}}
+</section>
+{{end}}

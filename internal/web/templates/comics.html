@@ -1,0 +1,50 @@
+{{define "content"}}
+<div class="head"><h1>Comics</h1><a class="btn ghost" href="/api/comics/export">Export (NDJSON)</a></div>
+
+{{with .Stats}}
+<section class="cards">
+  <div class="card"><div class="k">Comics</div><div class="v">{{num .Comics}}</div></div>
+  <div class="card"><div class="k">Series</div><div class="v">{{num .Series}}</div></div>
+  <div class="card"><div class="k">Read</div><div class="v">{{num .Read}}</div></div>
+  <div class="card"><div class="k">Dated reads</div><div class="v">{{num .Reads}}</div></div>
+  <div class="card"><div class="k">Rereads</div><div class="v">{{num .Rereads}}</div></div>
+</section>
+{{end}}
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Import from CLZ Comics</h2>
+    <form method="post" action="/comics/import" enctype="multipart/form-data" class="row">
+      <input type="file" name="file" accept=".csv,.txt,.tsv" required>
+      <button>Import</button>
+    </form>
+    <p class="muted small">In CLZ Comics, export your collection to CSV/text with the columns you want (Series, Issue, Title, Publisher, Read, Read Date, My Rating…). Every column is kept. Re-importing is safe; a new read date counts as a reread.
+    Files dropped in <code>{{.Dir}}</code> are imported automatically.</p>
+  </section>
+  <section class="panel">
+    <h2>Top publishers</h2>
+    <ol class="rank">{{range .Stats.Publishers}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
+    <h2>Reads by year</h2>
+    <ol class="rank">{{range .Stats.ReadByYear}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
+  </section>
+</div>
+
+<form method="get" class="filters">
+  <input type="search" name="q" value="{{.Q.Search}}" placeholder="Series, title, publisher, barcode">
+  <label class="small"><input type="checkbox" name="read" value="1" {{if .Q.ReadOnly}}checked{{end}}> read only</label>
+  <button>Filter</button>
+</form>
+<section class="panel">
+  <table>
+    <thead><tr><th>Series</th><th>#</th><th>Title</th><th>Publisher</th><th>Released</th><th>Read</th></tr></thead>
+    <tbody>
+    {{range .Comics}}
+      <tr><td><b>{{.Series}}</b>{{if .Variant}} <span class="muted small">{{.Variant}}</span>{{end}}</td><td class="mono">{{.Issue}}</td><td>{{.Title}}</td>
+        <td>{{.Publisher}}</td><td class="mono small">{{.ReleaseDate}}</td>
+        <td>{{if .Read}}<span class="ok">✓</span>{{end}}{{if gt .Reads 1}} <span class="small">×{{.Reads}}</span>{{end}}{{if .LastRead}} <span class="muted small mono">{{ts .LastRead}}</span>{{end}}{{if .Rating}} <span class="small">★{{.Rating}}</span>{{end}}</td></tr>
+    {{else}}<tr><td colspan="6" class="muted">No comics yet. Import a CLZ export above.</td></tr>{{end}}
+    </tbody>
+  </table>
+  {{if .HasMore}}<p class="pager"><a class="btn" href="?q={{.Q.Search}}{{if .Q.ReadOnly}}&read=1{{end}}&offset={{.Next}}">More →</a></p>{{end}}
+</section>
+{{end}}

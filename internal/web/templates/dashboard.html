@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="head">
+  <h1>Dashboard</h1>
+  {{template "userpicker" .}}
+</div>
+
+{{with .Stats}}
+<section class="cards">
+  <div class="card"><div class="k">Total plays</div><div class="v">{{num .Plays}}</div></div>
+  <div class="card"><div class="k">Movies</div><div class="v">{{num .Movies}}</div></div>
+  <div class="card"><div class="k">Episodes</div><div class="v">{{num .Episodes}}</div></div>
+  <div class="card"><div class="k">Shows</div><div class="v">{{num .Shows}}</div></div>
+  <div class="card"><div class="k">Time watched</div><div class="v">{{hours .Seconds}}</div></div>
+  <div class="card"><div class="k">This year</div><div class="v">{{num .ThisYear}}</div></div>
+  {{if .Tracks}}<div class="card"><div class="k">Tracks played</div><div class="v">{{num .Tracks}}</div></div>
+  <div class="card"><div class="k">Listening time</div><div class="v">{{hours .ListenSeconds}}</div></div>{{end}}
+</section>
+
+<div class="grid2">
+  <section class="panel">
+    <h2>By year</h2>
+    {{$max := .MaxYear}}
+    {{range .Years}}
+      <div class="bar">
+        <span class="y mono">{{.Year}}</span>
+        <span class="track"><span class="fill" style="width: {{pct .Plays $max}}%"></span></span>
+        <span class="n mono">{{num .Plays}}</span>
+      </div>
+    {{else}}<p class="muted">No plays yet.</p>{{end}}
+  </section>
+  <section class="panel">
+    <h2>Top shows</h2>
+    <ol class="rank">{{range .TopShows}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
+    <h2>Most-watched movies</h2>
+    <ol class="rank">{{range .TopMovies}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}×</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
+    {{if .Rewatched}}<h2>Most rewatched</h2>
+    <ol class="rank">{{range .Rewatched}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}×</span></li>{{end}}</ol>{{end}}
+    {{if .TopArtists}}<h2>Top artists</h2>
+    <ol class="rank">{{range .TopArtists}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{end}}</ol>{{end}}
+  </section>
+</div>
+{{end}}
+
+<section class="panel">
+  <h2>Recently watched <a class="more" href="/history{{if .User}}?user={{.User}}{{end}}">all history →</a></h2>
+  {{template "playtable" .Recent}}
+</section>
+{{end}}
