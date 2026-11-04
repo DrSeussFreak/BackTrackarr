@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - name: Build
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -e
+          mkdir -p dist
+          build() {
+            os=$1 arch=$2 arm=$3 name=$4
+            out=dist/stage/backtrackarr_${name}
+            mkdir -p "$out"
+            ext=""; [ "$os" = windows ] && ext=".exe"
+            GOOS=$os GOARCH=$arch GOARM=$arm CGO_ENABLED=0 go build -trimpath \
+              -ldflags="-s -w -X github.com/DrSeussFreak/BackTrackarr/internal/model.Version=${VERSION}" \
+              -o "$out/backtrackarr$ext" .
+            cp README.md LICENSE "$out/"
+            cp .env.example "$out/backtrackarr.env.example"
+            if [ "$os" = windows ]; then
+              cp deploy/windows/*.ps1 "$out/"
+              (cd dist/stage && zip -qr "../backtrackarr_${name}.zip" "backtrackarr_${name}")
+            else
+              cp deploy/linux/backtrackarr.service deploy/linux/install.sh "$out/" 2>/dev/null || true
+              tar -C dist/stage -czf "dist/backtrackarr_${name}.tar.gz" "backtrackarr_${name}"
+            fi
+          }
+          build linux amd64 "" linux_amd64
+          build linux arm64 "" linux_arm64
+          build linux arm 7 linux_armv7
+          build windows amd64 "" windows_amd64
+          build windows arm64 "" windows_arm64
+          build darwin amd64 "" macos_amd64
+          build darwin arm64 "" macos_arm64
+          (cd dist && sha256sum *.tar.gz *.zip > checksums.txt)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          generate_release_notes: true
