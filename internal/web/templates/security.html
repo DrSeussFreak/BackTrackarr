@@ -1,0 +1,112 @@
+{{define "content"}}
+<div class="head"><h1>Security</h1></div>
+
+{{if not .AuthEnabled}}
+<p class="warn">Sign-in is off: anyone who can reach this page can use BackTrackarr. Set <code>ADMIN_PASSWORD</code> (and restart), or add a passkey below to require it.</p>
+{{end}}
+
+{{if .NewCodes}}
+<section class="panel" id="codes">
+  <h2>Your recovery codes</h2>
+  <p><b>Save these now; they won't be shown again.</b> Each one works once, if you lose your authenticator app or passkeys.</p>
+  <ol class="codes">{{range .NewCodes}}<li>{{.}}</li>{{end}}</ol>
+</section>
+{{end}}
+<section class="panel" id="new-codes" hidden>
+  <h2>Your recovery codes</h2>
+  <p><b>Save these now; they won't be shown again.</b> Each one works once, if you lose your passkeys.</p>
+  <ol class="codes" id="new-codes-list"></ol>
+  <p><button onclick="location.reload()">I've saved them</button></p>
+</section>
+
+{{if .NewToken}}
+<section class="panel">
+  <h2>New API token: {{.NewTokenName}}</h2>
+  <p><b>Copy it now; it won't be shown again.</b></p>
+  <p><code class="copy">{{.NewToken}}</code></p>
+  <p class="muted small">Use it as <code>Authorization: Bearer {{.NewToken}}</code>, e.g. <code>curl -H "Authorization: Bearer …" https://…/api/stats</code></p>
+</section>
+{{end}}
+
+<div class="grid2">
+  <section class="panel" id="totp">
+    <h2>Authenticator app</h2>
+    {{with .TOTPError}}<p class="err">{{.}}</p>{{end}}
+    {{if .TOTPOn}}
+      <p><span class="ok">● On.</span> Signing in asks for a 6-digit code after your password.</p>
+      <form method="post" action="/security/totp/disable" class="row">
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Current code" size="12" required>
+        <button class="ghost">Turn off</button>
+      </form>
+    {{else if .PendingSecret}}
+      <p>Scan this with your authenticator app (1Password, Google Authenticator, Microsoft Authenticator, Authy, Bitwarden…):</p>
+      {{if .PendingQR}}<p><img class="qr" src="{{.PendingQR}}" alt="QR code for your authenticator app" width="210" height="210"></p>{{end}}
+      <p class="small">Or enter this key by hand: <span class="secret">{{.PendingSecret}}</span></p>
+      <form method="post" action="/security/totp/confirm" class="row">
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Code from the app" size="16" required autofocus>
+        <button>Turn on</button>
+      </form>
+    {{else}}
+      <p class="muted">Ask for a code from your phone after the password.</p>
+      {{if .HasPassword}}<form method="post" action="/security/totp/start"><button>Set up</button></form>
+      {{else}}<p class="warn small">Set <code>ADMIN_PASSWORD</code> first; the code is a second step after it. (Or use passkeys, which work without a password.)</p>{{end}}
+    {{end}}
+  </section>
+
+  <section class="panel">
+    <h2>Passkeys</h2>
+    <p class="muted small">Sign in with Face ID, Touch ID, Windows Hello, your phone or a security key: on their own, or as the second step after the password.</p>
+    {{if .Passkeys}}
+    <table>
+      {{range .Passkeys}}
+      <tr><td><b>{{.Name}}</b><div class="muted small">{{.RPID}} · added {{ts .CreatedAt}}{{if .LastUsed}} · last used {{ts .LastUsed}}{{end}}</div></td>
+        <td><form method="post" action="/security/passkeys/{{.ID}}/delete" class="inline" onsubmit="return confirm('Remove this passkey?')"><button class="link">Remove</button></form></td></tr>
+      {{end}}
+    </table>
+    {{end}}
+    {{if .PasskeyErr}}<p class="warn small">Passkeys aren't available at this address: {{.PasskeyErr}}</p>
+    {{else}}
+    <p class="row"><input id="pk-name" placeholder="Name, e.g. iPhone" size="16"><button type="button" onclick="btPasskeyRegister(document.getElementById('pk-name'), document.getElementById('pk-err'))">Add a passkey</button></p>
+    <p id="pk-err" class="err" hidden></p>
+    <p class="muted small">Passkeys belong to this address ({{.RPID}}); use the same address to sign in.</p>
+    {{end}}
+  </section>
+</div>
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Recovery codes</h2>
+    {{if or .TOTPOn .Passkeys}}
+      <p>{{.RecoveryLeft}} of 10 unused.</p>
+      <form method="post" action="/security/recovery" onsubmit="return confirm('Make new codes? The old ones will stop working.')"><button class="ghost">Make new codes</button></form>
+    {{else}}<p class="muted">Made when you turn on an authenticator app or add a passkey.</p>{{end}}
+    <p class="muted small">Locked out with no codes left? Start BackTrackarr once with <code>AUTH_RESET=true</code> to remove two-step sign-in, then sign in with the password.</p>
+  </section>
+
+  <section class="panel">
+    <h2>API tokens</h2>
+    <p class="muted small">For scripts and dashboards calling <code>/api/…</code>. With two-step sign-in on, the password alone no longer works there.</p>
+    {{if .Tokens}}
+    <table>
+      {{range .Tokens}}<tr><td><b>{{.Name}}</b><div class="muted small">created {{ts .CreatedAt}} · last used {{ts .LastUsed}}</div></td>
+        <td><form method="post" action="/security/tokens/{{.Hash}}/delete" class="inline" onsubmit="return confirm('Revoke this token?')"><button class="link">Revoke</button></form></td></tr>{{end}}
+    </table>
+    {{end}}
+    <form method="post" action="/security/tokens" class="row"><input name="name" placeholder="Name, e.g. Home Assistant" size="20"><button class="ghost">Create token</button></form>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Signed-in sessions</h2>
+  <table>
+    {{$cur := .Current}}
+    {{range .Sessions}}
+    <tr><td>{{if eq .IDHash $cur}}<b>This browser</b>{{else}}{{.Agent}}{{end}}<div class="muted small">{{.IP}} · signed in {{ts .CreatedAt}} · active {{ts .SeenAt}}</div></td>
+      <td>{{if ne .IDHash $cur}}<form method="post" action="/security/sessions/{{.IDHash}}/delete" class="inline"><button class="link">Sign out</button></form>{{end}}</td></tr>
+    {{else}}<tr><td class="muted">No sessions (sign-in is off, or you're using an API token).</td></tr>{{end}}
+  </table>
+  {{if gt (len .Sessions) 1}}<form method="post" action="/security/sessions/others"><button class="ghost">Sign out everywhere else</button></form>{{end}}
+  <p class="muted small">Sessions last {{.SessionDays}} days from the last visit (<code>SESSION_DAYS</code>).</p>
+</section>
+<script src="/static/passkeys.js"></script>
+{{end}}

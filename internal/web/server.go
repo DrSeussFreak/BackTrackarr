@@ -45,6 +45,8 @@ type Server struct {
 
 	mu   sync.Mutex
 	auth map[string]*authState
+
+	signin *authState2 // sign-in: limiter, passkey ceremonies
 }
 
 var funcs = template.FuncMap{
@@ -91,13 +93,13 @@ func num(n int64) string {
 }
 
 func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger) *Server {
-	s := &Server{cfg: cfg, st: st, eng: eng, log: log, tmpl: map[string]*template.Template{}, auth: map[string]*authState{}}
+	s := &Server{cfg: cfg, st: st, eng: eng, log: log, tmpl: map[string]*template.Template{}, auth: map[string]*authState{}, signin: newAuthState()}
 	fm := template.FuncMap{}
 	for k, v := range funcs {
 		fm[k] = v
 	}
 	fm["mine"] = eng.IsMyService
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming"} {
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "login", "mfa", "security"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
@@ -115,7 +117,6 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	admin := http.NewServeMux()
-	admin.Handle("GET /static/", http.FileServerFS(assets))
 	admin.HandleFunc("GET /{$}", s.dashboard)
 	admin.HandleFunc("GET /history", s.history)
 	admin.HandleFunc("POST /plays/{id}/delete", s.deletePlay)
@@ -132,28 +133,11 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("GET /api/export", s.apiExport)
 	s.routesExtra(admin)
 	s.routesStreaming(root, admin)
+	root.Handle("GET /static/", http.FileServerFS(assets))
+	s.routesAuth(root)
+	s.routesSecurity(admin)
 	root.Handle("/", s.guard(admin))
 	return root
-}
-
-// guard applies optional basic auth and blocks cross-site form posts.
-func (s *Server) guard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.AdminPassword != "" {
-			u, p, ok := r.BasicAuth()
-			if !ok || subtle.ConstantTimeCompare([]byte(u), []byte(s.cfg.AdminUser)) != 1 ||
-				subtle.ConstantTimeCompare([]byte(p), []byte(s.cfg.AdminPassword)) != 1 {
-				w.Header().Set("WWW-Authenticate", `Basic realm="backtrackarr"`)
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		if r.Method == http.MethodPost && r.Header.Get("Sec-Fetch-Site") == "cross-site" {
-			http.Error(w, "cross-site request blocked", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func (s *Server) render(w http.ResponseWriter, page string, data M) {

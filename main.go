@@ -46,6 +46,12 @@ func run(cfg *config.Config, log *slog.Logger) error {
 		return err
 	}
 	st.CompressBackups = cfg.BackupCompress
+	if cfg.AuthReset {
+		if err := st.ResetMFA(context.Background(), cfg.AdminUser); err != nil {
+			return err
+		}
+		log.Warn("AUTH_RESET: removed MFA, passkeys and sessions; sign in with the password, then remove AUTH_RESET", "user", cfg.AdminUser)
+	}
 	defer st.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

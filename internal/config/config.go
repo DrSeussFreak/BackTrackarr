@@ -79,6 +79,11 @@ type Config struct {
 	TrackerPullUser string
 	StreamImportDir string
 	EnvFile         string // settings file that was loaded, if any
+
+	// Sign-in. AuthReset removes MFA and passkeys at startup (lost authenticator).
+	SessionTTL time.Duration
+	TrustProxy bool
+	AuthReset  bool
 }
 
 // MediaServer is a Jellyfin or Emby server that playlists can be copied to.
@@ -144,6 +149,9 @@ func Load() *Config {
 		TrackerPull:       time.Duration(envInt("TRACKER_PULL_MINUTES", 60)) * time.Minute,
 		TrackerPullUser:   env("TRACKER_PULL_USER", ""),
 		EnvFile:           envFile,
+		SessionTTL:        time.Duration(envInt("SESSION_DAYS", 30)) * 24 * time.Hour,
+		TrustProxy:        envBool("TRUST_PROXY", false),
+		AuthReset:         envBool("AUTH_RESET", false),
 	}
 	c.ClzImportDir = env("CLZ_IMPORT_DIR", c.DataDir+"/import/clz")
 	c.StreamImportDir = env("STREAMING_IMPORT_DIR", c.DataDir+"/import/streaming")

@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="auth-box panel">
+  <h1>Sign in</h1>
+  {{with .Error}}<p class="err">{{.}}</p>{{end}}
+  {{if .HasPassword}}
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{.Next}}">
+    <p><input name="username" placeholder="Username" autocomplete="username webauthn" required autofocus></p>
+    <p><input name="password" type="password" placeholder="Password" autocomplete="current-password" required></p>
+    <p><button>Sign in</button></p>
+  </form>
+  {{end}}
+  {{if .HasPasskeys}}
+    {{if .HasPassword}}<p class="or">or</p>{{end}}
+    {{if .PasskeyErr}}<p class="muted small">Passkeys aren't available at this address: {{.PasskeyErr}}</p>
+    {{else}}
+    <p><button class="ghost" type="button" onclick="btPasskeyLogin({{.Next}}, document.getElementById('pk-err'))">Sign in with a passkey</button></p>
+    <p id="pk-err" class="err" hidden></p>
+    {{end}}
+  {{end}}
+</div>
+<script src="/static/passkeys.js"></script>
+{{end}}

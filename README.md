@@ -40,6 +40,43 @@ Open `http://<host>:8787`. Then go to **Sync**:
    service.
 4. **Streaming services.** See the **Streaming** page (below).
 
+## Sign-in, two-step verification and passkeys
+
+Set `ADMIN_PASSWORD` and BackTrackarr asks you to sign in. Then turn on more
+protection on the **Security** page:
+
+- **Authenticator app (TOTP).** After the password, enter a 6-digit code
+  from 1Password, Google or Microsoft Authenticator, Authy, Bitwarden or a
+  similar app. Scan the QR code to set it up. Each code works once.
+- **Passkeys.** Sign in with Face ID, Touch ID, Windows Hello, your phone
+  or a security key. A passkey works on its own, or as the second step
+  after the password. With a passkey you don't even need a password.
+- **Recovery codes.** Ten one-time codes, made when you add your first
+  second factor and shown once.
+- **API tokens** for scripts. With two-step sign-in on, the password alone
+  no longer opens `/api/…` (old HTTP basic auth stops working there). Use
+  `Authorization: Bearer <token>`. Webhook and scrobble URLs keep using
+  their own token in the URL.
+- **Sessions.** See where you're signed in and sign out other devices.
+  Sign-ins last `SESSION_DAYS` days from the last visit.
+
+Repeated wrong passwords or codes lock that address out for 15 minutes.
+
+**Passkeys need HTTPS on a domain name.** Browsers only allow passkeys on a
+secure address like `https://backtrackarr.example.com`, or on `localhost`.
+They don't work on `http://192.168.x.x`, where you can use the
+authenticator app instead. Put BackTrackarr behind a reverse proxy with a
+certificate (Caddy, Nginx Proxy Manager, Traefik, a Cloudflare tunnel…).
+Set `TRUST_PROXY=true` so it sees the real client address and HTTPS. A
+passkey belongs to the address it was made on, so sign in at that same
+address.
+
+**Locked out?** Lost your authenticator and every recovery code? Start
+BackTrackarr once with `AUTH_RESET=true`. That removes two-step sign-in and
+passkeys. Sign in with the password, set it back to `false`, and set up
+again. Anyone who can change BackTrackarr's settings can already read its
+database, so this gives nothing away.
+
 ## Why SQLite, and how big it gets
 
 SQLite is the right database here even at many gigabytes. It handles
@@ -233,7 +270,9 @@ Adult content is supported, and kept private:
 
 ## API
 
-All API routes sit behind the admin basic auth.
+All API routes need you to be signed in: a browser session, an API token
+(`Authorization: Bearer bt_…`, made on the Security page), or HTTP basic auth
+with the admin password while two-step sign-in is off.
 
 Exceptions: the webhook and scrobble endpoints below use the webhook token in the URL instead.
 

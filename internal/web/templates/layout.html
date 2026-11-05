@@ -10,6 +10,7 @@
 <body>
 <header class="top">
   <a class="brand" href="/">BackTrackarr</a>
+  {{if not .Bare}}
   <nav>
     <a href="/" {{if eq .Nav "dash"}}class="on"{{end}}>Dashboard</a>
     <a href="/history" {{if eq .Nav "history"}}class="on"{{end}}>History</a>
@@ -18,7 +19,10 @@
     <a href="/comics" {{if eq .Nav "comics"}}class="on"{{end}}>Comics</a>
     <a href="/recs" {{if eq .Nav "recs"}}class="on"{{end}}>For you</a>
     <a href="/sync" {{if eq .Nav "sync"}}class="on"{{end}}>Sync</a>
+    <a href="/security" {{if eq .Nav "security"}}class="on"{{end}}>Security</a>
   </nav>
+  <form method="post" action="/logout" class="signout"><button class="link" title="Sign out">Sign out</button></form>
+  {{end}}
 </header>
 <main>
 {{with .Flash}}<p class="flash">{{.}}</p>{{end}}

@@ -1,6 +1,6 @@
 # Multi-arch image (linux/amd64, linux/arm64, linux/arm/v7). The Go build
 # cross-compiles on the build machine, so no emulation is needed.
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG TARGETVARIANT=

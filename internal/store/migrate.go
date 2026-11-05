@@ -15,7 +15,9 @@ import (
 //	1: first release (movies and episodes)
 //	2: music (media.album, media.mbid, 'track' kind) and private plays
 //	3: recs.providers (where to stream a recommendation)
-const schemaVersion = 3
+//	4: sign-in tables (sessions, TOTP, recovery codes, passkeys, API tokens);
+//	   new tables only, created by schema.sql
+const schemaVersion = 4
 
 func hasTable(db *sql.DB, name string) (bool, error) {
 	var n int

@@ -262,3 +262,47 @@ CREATE TABLE IF NOT EXISTS recs (
   providers   TEXT
 );
 CREATE INDEX IF NOT EXISTS recs_run ON recs(run_id)
+;
+
+-- ---------- sign-in (sessions, MFA, passkeys, API tokens) ----------
+-- Secrets that grant access (session ids, recovery codes, API tokens) are
+-- stored only as SHA-256 hashes.
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id_hash    TEXT PRIMARY KEY,
+  user       TEXT    NOT NULL,
+  mfa_done   INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  seen_at    INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  ip         TEXT,
+  agent      TEXT
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS auth_totp (
+  user       TEXT PRIMARY KEY,
+  secret     TEXT    NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 0,
+  last_step  INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS auth_recovery (
+  user      TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  used_at   INTEGER,
+  PRIMARY KEY (user, code_hash)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS auth_passkeys (
+  id         TEXT PRIMARY KEY,
+  user       TEXT    NOT NULL,
+  name       TEXT    NOT NULL,
+  rp_id      TEXT    NOT NULL,
+  credential TEXT    NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_used  INTEGER
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  hash       TEXT PRIMARY KEY,
+  user       TEXT    NOT NULL,
+  name       TEXT    NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_used  INTEGER
+) WITHOUT ROWID

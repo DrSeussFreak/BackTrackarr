@@ -81,3 +81,15 @@ form.inline { display: inline; }
 .flash { background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; }
 .tag.private { color: var(--bad); }
 label.small { display: inline-flex; gap: 4px; align-items: center; }
+.signout { margin-left: auto; }
+.signout button.link:hover { color: var(--accent); }
+.auth-box { max-width: 380px; margin: 8vh auto 0; }
+.auth-box h1 { text-align: center; }
+.auth-box form p { margin: 0 0 12px; }
+.auth-box input { width: 100%; padding: 9px 10px; font-size: 15px; }
+.auth-box button { width: 100%; padding: 9px; font-size: 15px; }
+.auth-box .or { text-align: center; color: var(--muted); margin: 16px 0; font-size: 13px; }
+.err { color: var(--bad); }
+.codes { columns: 2; font-family: ui-monospace, Menlo, monospace; font-size: 15px; background: var(--bg); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--line); }
+.secret { font-family: ui-monospace, Menlo, monospace; letter-spacing: .08em; word-break: break-all; }
+img.qr { background: #fff; padding: 8px; border-radius: 8px; image-rendering: pixelated; }

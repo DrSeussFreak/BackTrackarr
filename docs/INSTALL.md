@@ -170,7 +170,7 @@ data too).
 
 ## From source
 
-Requires Go 1.23 or newer. No C compiler is needed: the SQLite driver is pure Go.
+Requires Go 1.26 or newer. No C compiler is needed: the SQLite driver is pure Go.
 
 ```bash
 git clone https://github.com/DrSeussFreak/BackTrackarr.git
@@ -198,3 +198,28 @@ A compressed snapshot is written to the data folder's `backups/` every day.
 The last 7 are kept (`BACKUP_KEEP`). To restore one, stop BackTrackarr,
 unzip it (`gunzip backtrackarr-….db.gz`), and put it in place as
 `backtrackarr.db`.
+
+## HTTPS and passkeys
+
+Two-step sign-in with an authenticator app works on any address. Passkeys
+only work on HTTPS with a domain name (or on `localhost`), because browsers
+won't offer them anywhere else. Typical setup:
+
+1. Point a name at your server, e.g. `backtrackarr.example.com`. A local DNS
+   name or a Cloudflare/Tailscale address works too.
+2. Put a reverse proxy with a certificate in front: Caddy, Nginx Proxy
+   Manager, Traefik, SWAG, or a Cloudflare tunnel. Forward to port 8787 and
+   keep the original `Host` header.
+3. Set `BASE_URL=https://backtrackarr.example.com` and `TRUST_PROXY=true`.
+
+Caddy, for example:
+
+```
+backtrackarr.example.com {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+Only set `TRUST_PROXY=true` when every request comes through the proxy.
+Otherwise someone could fake their IP address and get around the
+failed-attempt lockout.

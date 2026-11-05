@@ -14,6 +14,8 @@ services:
       TZ: ${TZ:-UTC}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      AUTH_RESET: ${AUTH_RESET:-false}
       BASE_URL: ${BASE_URL:-}
       WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-}
       PLEX_URL: ${PLEX_URL:-}
