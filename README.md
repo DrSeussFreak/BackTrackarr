@@ -19,7 +19,8 @@ webhooks.
 ## Install
 
 Docker, Docker Compose, Portainer, Linux (systemd) and Windows are all
-covered step by step in **[docs/INSTALL.md](docs/INSTALL.md)**. The quickest
+covered step by step in **[docs/INSTALL.md](docs/INSTALL.md)**. Every setting is
+explained as a question to answer in **[docs/CONFIG.md](docs/CONFIG.md)**. The quickest
 way:
 
 ```bash

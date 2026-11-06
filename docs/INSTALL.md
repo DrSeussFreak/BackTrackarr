@@ -78,20 +78,135 @@ name works as the subfolder).
 
 ## Portainer
 
-1. **Stacks → Add stack**, name it `backtrackarr`.
-2. Choose one:
-   - **Web editor:** paste [deploy/portainer/stack.yml](../deploy/portainer/stack.yml).
-   - **Repository:** URL `https://github.com/DrSeussFreak/BackTrackarr`,
-     reference `refs/heads/main`, compose path `deploy/portainer/stack.yml`.
-     This lets Portainer pull updates for you, and can do it automatically
-     with *GitOps updates*.
-3. Under **Environment variables**, add at least `ADMIN_PASSWORD`,
-   `PLEX_URL` and `PLEX_TOKEN`, plus any others you want, such as
-   `TRAKT_CLIENT_ID` and `TMDB_API_KEY`. Anything not set uses its default.
-   *Advanced mode* lets you paste the whole `.env.example`.
-4. **Deploy the stack.**
+Everything you need, in order. It takes about 5 minutes.
 
-Update: open the stack → **Pull and redeploy** (tick *Re-pull image*).
+**Before you start, have these ready.** Use [CONFIG.md](CONFIG.md) to work
+out your answers:
+
+- Your **Plex address and token** (CONFIG.md §2).
+- The **address you'll open BackTrackarr at**: your server's IP and port
+  8787, or a domain behind a reverse proxy.
+- Any optional keys you want: Trakt, Simkl, TMDB, Sonarr/Radarr, AI.
+
+### 1. Create the stack
+
+**Stacks → + Add stack**, then:
+
+| Field | Value |
+|---|---|
+| Name | `backtrackarr` (lowercase, no spaces) |
+| Build method | **Repository** (recommended: updates with one click) or **Web editor** |
+
+**Repository** fields:
+
+| Field | Value |
+|---|---|
+| Repository URL | `https://github.com/DrSeussFreak/BackTrackarr` |
+| Repository reference | `refs/heads/main` |
+| Compose path | `deploy/portainer/stack.yml` |
+| Authentication | off (the repository is public) |
+| GitOps updates | optional: **on**, mechanism *Polling*, interval `24h`, so Portainer redeploys when the stack file changes |
+
+**Web editor:** paste the contents of
+[deploy/portainer/stack.yml](../deploy/portainer/stack.yml) instead.
+
+### 2. Environment variables
+
+1. Scroll to **Environment variables** and click **Advanced mode**.
+2. Paste
+   [deploy/portainer/stack.env.example](../deploy/portainer/stack.env.example).
+3. Replace every `<…>` value with your own. The minimum is
+   `ADMIN_PASSWORD`, `TZ`, `BASE_URL`, `PLEX_URL` and `PLEX_TOKEN`.
+4. Lines left ending in `=` use the default. Delete lines you'll never
+   need if you like.
+5. Add extra lines for anything else in CONFIG.md, e.g. a second Radarr:
+   ```
+   RADARR_2_URL=http://192.168.1.10:7879
+   RADARR_2_API_KEY=abc123
+   RADARR_2_NAME=radarr-4k
+   ```
+
+Portainer saves these as `stack.env`, and the stack hands every line to
+BackTrackarr. Don't use quotes around values, and no spaces around `=`.
+
+### 3. Deploy
+
+Click **Deploy the stack**. Portainer pulls
+`ghcr.io/drseussfreak/backtrackarr`, about 20 MB; the image is public, so no
+registry login is needed. It then creates:
+
+- **Container** `backtrackarr`: restarts automatically, limited to 128 MB of
+  RAM and half a CPU. It has a built-in health check, so it shows
+  *healthy* after about 10 seconds.
+- **Volume** `backtrackarr_backtrackarr-data`: your database, backups and
+  imports. Back up or move this volume to keep your history.
+- **Port**: the host's `PORT` (8787) to the container's 8787.
+
+### 4. First sign-in
+
+1. Open `BASE_URL`, e.g. `http://192.168.1.10:8787`, and sign in with
+   `ADMIN_USER` / `ADMIN_PASSWORD`.
+2. **Sync** page:
+   - Copy the **Plex webhook URL** into Plex → Settings → Webhooks (needs
+     Plex Pass).
+   - **Connect** Trakt and Simkl.
+   - Click **Import Plex watch history**.
+3. **Security** page: set up an authenticator app and/or passkeys.
+4. **Streaming** page: import Netflix and other exports, and install the
+   browser scrobbler.
+
+### Updating
+
+| Build method | How to update |
+|---|---|
+| Repository | Stack → **Pull and redeploy** (tick *Re-pull image and redeploy*). |
+| Web editor | Stack → **Editor** → **Update the stack** (tick *Re-pull image and redeploy*). |
+| Pin a version | Set `BACKTRACKARR_VERSION=0.3.0` instead of `latest`. |
+
+Your data stays in the volume across updates.
+
+### Changing settings later
+
+Stack → **Editor** → change the environment variables → **Update the
+stack**. The container restarts with the new values.
+
+### Optional extras
+
+- **Import folder on the host.** In the stack file, uncomment
+  `- /srv/backtrackarr/import:/data/import` and change the left side to a
+  folder on your server. CLZ exports go in `clz/`, streaming exports in
+  `streaming/netflix/`, `streaming/hulu/` and so on. With Repository mode,
+  switch to the Web editor to make this change.
+- **Reverse proxy and passkeys.** Put Nginx Proxy Manager, Caddy, Traefik
+  or SWAG in front with a certificate. For SWAG, use the ready-made
+  [deploy/swag/backtrackarr.subdomain.conf.sample](../deploy/swag/backtrackarr.subdomain.conf.sample). Then set `BASE_URL=https://…` and
+  `TRUST_PROXY=true`, and update the stack.
+  - If the proxy runs in Docker, either put both on the same network and
+    proxy to `http://backtrackarr:8787`, or proxy to `http://<host-ip>:8787`.
+  - To join BackTrackarr to an existing proxy network, add this to the
+    stack (Web editor):
+    ```yaml
+        networks: [proxy]
+    networks:
+      proxy:
+        external: true
+    ```
+- **Plex in Docker on the same host.** `PLEX_URL=http://<host-ip>:32400`
+  always works. `http://plex:32400` only works if both containers share a
+  network.
+
+### Troubleshooting
+
+- **Logs:** Containers → `backtrackarr` → **Logs**. It prints which
+  services were found and any errors.
+- **Webhook not arriving.** Plex must be able to reach `BASE_URL`. Test by
+  opening the webhook URL's address from the Plex machine.
+- **"Sign in required" from a script.** Two-step sign-in is on; use an API
+  token from the Security page.
+- **Locked out of two-step sign-in.** Add `AUTH_RESET=true`, update the
+  stack, sign in with the password, then remove the line and update again.
+- **"env file stack.env not found".** The stack has no environment
+  variables yet. Add at least `ADMIN_PASSWORD` and deploy again.
 
 ## Linux
 

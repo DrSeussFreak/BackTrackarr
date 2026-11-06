@@ -1,0 +1,49 @@
+## BackTrackarr for linuxserver SWAG
+# Copy to /config/nginx/proxy-confs/backtrackarr.subdomain.conf (drop .sample)
+# and restart SWAG. Your SWAG certificate must cover backtrackarr.<your domain>
+# (add "backtrackarr" to SUBDOMAINS, or use a wildcard certificate).
+#
+# In BackTrackarr set:
+#   BASE_URL=https://backtrackarr.<your domain>
+#   TRUST_PROXY=true
+#
+# If SWAG and BackTrackarr share a Docker network, keep $upstream_app
+# backtrackarr (the container name). Otherwise put the server's LAN IP there.
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name backtrackarr.*;
+
+    include /config/nginx/ssl.conf;
+
+    # History exports (Netflix, CLZ...) can be large.
+    client_max_body_size 256m;
+
+    # Optional SSO in front of the web UI. BackTrackarr has its own sign-in
+    # (with 2FA and passkeys), so this is not needed. If you enable it, keep
+    # the webhook and scrobble locations below outside of it.
+    #include /config/nginx/authelia-server.conf;
+
+    location / {
+        #include /config/nginx/authelia-location.conf;
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+        set $upstream_app backtrackarr;
+        set $upstream_port 8787;
+        set $upstream_proto http;
+        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+    }
+
+    # Plex/Jellyfin/Emby webhooks and the streaming scrobbler use their own
+    # token in the URL, so they must never sit behind SSO.
+    location ~ ^/(webhook|api/scrobble)/ {
+        include /config/nginx/proxy.conf;
+        include /config/nginx/resolver.conf;
+        set $upstream_app backtrackarr;
+        set $upstream_port 8787;
+        set $upstream_proto http;
+        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+    }
+}

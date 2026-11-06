@@ -1,8 +1,14 @@
-# Portainer: Stacks -> Add stack -> Web editor (paste this) or Repository
-# (https://github.com/DrSeussFreak/BackTrackarr, compose path
-# deploy/portainer/stack.yml). Set the variables under "Environment variables";
-# anything left empty uses the default shown here. Every setting from
-# .env.example can be added the same way.
+# BackTrackarr for Portainer (Stacks -> Add stack).
+#
+# Web editor: paste this file. Repository: URL
+# https://github.com/DrSeussFreak/BackTrackarr, reference refs/heads/main,
+# compose path deploy/portainer/stack.yml.
+#
+# Settings: under "Environment variables" click "Advanced mode" and paste
+# deploy/portainer/stack.env.example with your values. Portainer saves them
+# as stack.env, and every line is handed to the container below, so any
+# setting from docs/CONFIG.md works (including RADARR_2_URL and the like).
+# PORT and BACKTRACKARR_VERSION are also used here in the stack itself.
 services:
   backtrackarr:
     image: ghcr.io/drseussfreak/backtrackarr:${BACKTRACKARR_VERSION:-latest}
@@ -10,45 +16,13 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-8787}:8787"
-    environment:
-      TZ: ${TZ:-UTC}
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      TRUST_PROXY: ${TRUST_PROXY:-false}
-      AUTH_RESET: ${AUTH_RESET:-false}
-      BASE_URL: ${BASE_URL:-}
-      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-}
-      PLEX_URL: ${PLEX_URL:-}
-      PLEX_TOKEN: ${PLEX_TOKEN:-}
-      PLEX_POLL_SECONDS: ${PLEX_POLL_SECONDS:-0}
-      SCROBBLE_USERS: ${SCROBBLE_USERS:-}
-      PRIVATE_LIBRARIES: ${PRIVATE_LIBRARIES:-}
-      PLEX_ALLOW_WRITES: ${PLEX_ALLOW_WRITES:-false}
-      TRAKT_CLIENT_ID: ${TRAKT_CLIENT_ID:-}
-      TRAKT_CLIENT_SECRET: ${TRAKT_CLIENT_SECRET:-}
-      SIMKL_CLIENT_ID: ${SIMKL_CLIENT_ID:-}
-      FLOPPY_URL: ${FLOPPY_URL:-}
-      FLOPPY_TOKEN: ${FLOPPY_TOKEN:-}
-      RELAY_URLS: ${RELAY_URLS:-}
-      WEBHOOK_URLS: ${WEBHOOK_URLS:-}
-      TMDB_API_KEY: ${TMDB_API_KEY:-}
-      STREAMING_REGION: ${STREAMING_REGION:-US}
-      MY_STREAMING_SERVICES: ${MY_STREAMING_SERVICES:-}
-      JELLYFIN_URL: ${JELLYFIN_URL:-}
-      JELLYFIN_API_KEY: ${JELLYFIN_API_KEY:-}
-      EMBY_URL: ${EMBY_URL:-}
-      EMBY_API_KEY: ${EMBY_API_KEY:-}
-      SONARR_URL: ${SONARR_URL:-}
-      SONARR_API_KEY: ${SONARR_API_KEY:-}
-      RADARR_URL: ${RADARR_URL:-}
-      RADARR_API_KEY: ${RADARR_API_KEY:-}
-      WHISPARR_URL: ${WHISPARR_URL:-}
-      WHISPARR_API_KEY: ${WHISPARR_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+    env_file:
+      - stack.env
     volumes:
       - backtrackarr-data:/data
+      # Optional: a host folder for CLZ and streaming-service exports
+      # (files in clz/ and streaming/<service>/ are imported automatically).
+      # - /srv/backtrackarr/import:/data/import
     deploy:
       resources:
         limits:
