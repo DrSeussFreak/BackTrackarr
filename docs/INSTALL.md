@@ -8,7 +8,7 @@ move between them (copy `backtrackarr.db` from the data folder).
 |---|---|---|
 | [Docker](#docker) | Any machine with Docker | `docker pull` + recreate |
 | [Docker Compose](#docker-compose) | Most home servers | `docker compose pull && docker compose up -d` |
-| [Portainer](#portainer) | Managing containers in a web UI | *Pull and redeploy* |
+| [Portainer](#portainer) | Managing containers in a web UI | Editor → *Re-pull image* → Update |
 | [Linux (systemd)](#linux) | A Pi, VM or server without Docker | re-run the installer |
 | [Windows](#windows) | A Windows PC or server | re-run the installer |
 | [From source](#from-source) | Development | `git pull && go build` |
@@ -95,20 +95,18 @@ out your answers:
 | Field | Value |
 |---|---|
 | Name | `backtrackarr` (lowercase, no spaces) |
-| Build method | **Repository** (recommended: updates with one click) or **Web editor** |
+| Build method | **Web editor** |
 
-**Repository** fields:
+Paste the contents of
+[deploy/portainer/stack.yml](../deploy/portainer/stack.yml) into the editor.
 
-| Field | Value |
-|---|---|
-| Repository URL | `https://github.com/DrSeussFreak/BackTrackarr` |
-| Repository reference | `refs/heads/main` |
-| Compose path | `deploy/portainer/stack.yml` |
-| Authentication | off (the repository is public) |
-| GitOps updates | optional: **on**, mechanism *Polling*, interval `24h`, so Portainer redeploys when the stack file changes |
-
-**Web editor:** paste the contents of
-[deploy/portainer/stack.yml](../deploy/portainer/stack.yml) instead.
+> **Use the Web editor, not Repository.** The stack reads your settings
+> from `stack.env`. Portainer creates that file from your environment
+> variables for the Web editor, Upload and Custom template methods. With
+> **Repository**, Portainer expects `stack.env` to already be in the Git
+> repo, and your passwords and keys must never go in a public repo. Only
+> use Repository from your own private fork that holds a `stack.env`.
+> Portainer also only accepts lowercase stack names.
 
 ### 2. Environment variables
 
@@ -119,6 +117,8 @@ out your answers:
    `ADMIN_PASSWORD`, `TZ`, `BASE_URL`, `PLEX_URL` and `PLEX_TOKEN`.
 4. Lines left ending in `=` use the default. Delete lines you'll never
    need if you like.
+   Don't leave a `<…>` placeholder in place: it would be used as the real
+   value. Delete the line instead.
 5. Add extra lines for anything else in CONFIG.md, e.g. a second Radarr:
    ```
    RADARR_2_URL=http://192.168.1.10:7879
@@ -159,7 +159,6 @@ registry login is needed. It then creates:
 
 | Build method | How to update |
 |---|---|
-| Repository | Stack → **Pull and redeploy** (tick *Re-pull image and redeploy*). |
 | Web editor | Stack → **Editor** → **Update the stack** (tick *Re-pull image and redeploy*). |
 | Pin a version | Set `BACKTRACKARR_VERSION=0.3.0` instead of `latest`. |
 
@@ -175,8 +174,7 @@ stack**. The container restarts with the new values.
 - **Import folder on the host.** In the stack file, uncomment
   `- /srv/backtrackarr/import:/data/import` and change the left side to a
   folder on your server. CLZ exports go in `clz/`, streaming exports in
-  `streaming/netflix/`, `streaming/hulu/` and so on. With Repository mode,
-  switch to the Web editor to make this change.
+  `streaming/netflix/`, `streaming/hulu/` and so on.
 - **Reverse proxy and passkeys.** Put Nginx Proxy Manager, Caddy, Traefik
   or SWAG in front with a certificate. For SWAG, use the ready-made
   [deploy/swag/backtrackarr.subdomain.conf.sample](../deploy/swag/backtrackarr.subdomain.conf.sample). Then set `BASE_URL=https://…` and
@@ -205,8 +203,10 @@ stack**. The container restarts with the new values.
   token from the Security page.
 - **Locked out of two-step sign-in.** Add `AUTH_RESET=true`, update the
   stack, sign in with the password, then remove the line and update again.
-- **"env file stack.env not found".** The stack has no environment
-  variables yet. Add at least `ADMIN_PASSWORD` and deploy again.
+- **"env file stack.env not found".** Either the stack has no
+  environment variables yet (add at least `ADMIN_PASSWORD` and deploy
+  again), or it was created with the **Repository** method. Recreate it
+  with the **Web editor**.
 
 ## Linux
 

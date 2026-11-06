@@ -1,8 +1,8 @@
 # BackTrackarr for Portainer (Stacks -> Add stack).
 #
-# Web editor: paste this file. Repository: URL
-# https://github.com/DrSeussFreak/BackTrackarr, reference refs/heads/main,
-# compose path deploy/portainer/stack.yml.
+# Use the Web editor: paste this file, and name the stack in lowercase
+# (e.g. backtrackarr). Not Repository: Portainer then expects stack.env to be
+# in the Git repo, and your keys must never go in a public repo.
 #
 # Settings: under "Environment variables" click "Advanced mode" and paste
 # deploy/portainer/stack.env.example with your values. Portainer saves them

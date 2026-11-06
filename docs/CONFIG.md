@@ -229,7 +229,9 @@ exports. Default `/data/import/clz`.
 
 ## Portainer
 
-1. In your stack, open **Environment variables** and click **Advanced mode**.
+1. Create the stack with the **Web editor** (not Repository; see
+   [INSTALL.md](INSTALL.md#portainer)), then open **Environment variables**
+   and click **Advanced mode**.
 2. Paste the list from
    [deploy/portainer/stack.env.example](../deploy/portainer/stack.env.example).
    It has every setting, one per line, already in the format Portainer
