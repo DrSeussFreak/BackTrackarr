@@ -154,17 +154,20 @@ func (s *Store) SaveDeleteRule(ctx context.Context, instance string, arrID int64
 	return err
 }
 
-// mediaMatch selects media rows for a title by id, or by name when the row
-// has no ids. ?1 tvdb, ?2 tmdb, ?3 imdb, ?4 title.
-const showMatch = `((?1<>0 AND m.show_tvdb=?1) OR (?2<>0 AND m.show_tmdb=?2) OR (?3<>'' AND m.show_imdb=?3) OR
-	(m.show_tvdb IS NULL AND m.show_tmdb IS NULL AND m.show_imdb IS NULL AND lower(m.show_title)=lower(?4)))`
-const movieMatch = `((?1<>0 AND m.tvdb=?1) OR (?2<>0 AND m.tmdb=?2) OR (?3<>'' AND m.imdb=?3) OR
-	(m.tvdb IS NULL AND m.tmdb IS NULL AND m.imdb IS NULL AND lower(m.title)=lower(?4) AND (?5=0 OR m.year IS NULL OR m.year=?5)))`
+// Only a matching id can unlock a delete. A play with no ids, or with an id
+// that contradicts the title's, never counts: same-named shows and remakes
+// must not vouch for each other. ?1 tvdb, ?2 tmdb, ?3 imdb.
+const showMatch = `((?1<>0 AND m.show_tvdb=?1) OR (?2<>0 AND m.show_tmdb=?2) OR (?3<>'' AND m.show_imdb=?3))
+	AND (?1=0 OR m.show_tvdb IS NULL OR m.show_tvdb=?1) AND (?2=0 OR m.show_tmdb IS NULL OR m.show_tmdb=?2)
+	AND (?3='' OR m.show_imdb IS NULL OR m.show_imdb=?3)`
+const movieMatch = `((?1<>0 AND m.tvdb=?1) OR (?2<>0 AND m.tmdb=?2) OR (?3<>'' AND m.imdb=?3))
+	AND (?1=0 OR m.tvdb IS NULL OR m.tvdb=?1) AND (?2=0 OR m.tmdb IS NULL OR m.tmdb=?2)
+	AND (?3='' OR m.imdb IS NULL OR m.imdb=?3)`
 
 // EpisodeWatches maps season and episode to each user's latest watch.
 func (s *Store) EpisodeWatches(ctx context.Context, r DeleteRule) (map[[2]int]map[string]int64, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT m.season, m.episode, lower(p.user), MAX(p.watched_at) FROM plays p JOIN media m ON m.id=p.media_id
-		WHERE m.kind='episode' AND m.season IS NOT NULL AND m.episode IS NOT NULL AND `+showMatch+` GROUP BY 1,2,3`, r.TVDB, r.TMDB, r.IMDB, r.Title)
+		WHERE m.kind='episode' AND m.season IS NOT NULL AND m.episode IS NOT NULL AND `+showMatch+` GROUP BY 1,2,3`, r.TVDB, r.TMDB, r.IMDB)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +192,7 @@ func (s *Store) EpisodeWatches(ctx context.Context, r DeleteRule) (map[[2]int]ma
 // MovieWatches maps each user to their latest watch of a movie.
 func (s *Store) MovieWatches(ctx context.Context, r DeleteRule) (map[string]int64, error) {
 	rows, err := s.DB.QueryContext(ctx, `SELECT lower(p.user), MAX(p.watched_at) FROM plays p JOIN media m ON m.id=p.media_id
-		WHERE m.kind='movie' AND `+movieMatch+` GROUP BY 1`, r.TVDB, r.TMDB, r.IMDB, r.Title, r.Year)
+		WHERE m.kind='movie' AND `+movieMatch+` GROUP BY 1`, r.TVDB, r.TMDB, r.IMDB)
 	if err != nil {
 		return nil, err
 	}
@@ -208,17 +211,23 @@ func (s *Store) MovieWatches(ctx context.Context, r DeleteRule) (map[string]int6
 
 func (s *Store) ruleWhere(r DeleteRule) (string, []any) {
 	if r.Kind == "series" {
-		return `m.kind='episode' AND ` + showMatch, []any{r.TVDB, r.TMDB, r.IMDB, r.Title}
+		return `m.kind='episode' AND ` + showMatch, []any{r.TVDB, r.TMDB, r.IMDB}
 	}
-	return `m.kind='movie' AND ` + movieMatch, []any{r.TVDB, r.TMDB, r.IMDB, r.Title, r.Year}
+	return `m.kind='movie' AND ` + movieMatch, []any{r.TVDB, r.TMDB, r.IMDB}
 }
 
-// BeingWatched reports whether anyone has a recent session on this title.
+// BeingWatched reports whether anyone may be watching this title. Unlike the
+// checks above it also matches by name, because here a false match only delays
+// a delete.
 func (s *Store) BeingWatched(ctx context.Context, r DeleteRule) (bool, error) {
 	where, args := s.ruleWhere(r)
+	name := `m.kind='movie' AND lower(m.title)=lower(?4)`
+	if r.Kind == "series" {
+		name = `m.kind='episode' AND lower(m.show_title)=lower(?4)`
+	}
 	var n int
-	err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions x JOIN media m ON m.id=x.media_id WHERE `+where+
-		` AND x.updated_at > `+itoa64(time.Now().Add(-6*time.Hour).Unix()), args...).Scan(&n)
+	err := s.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions x JOIN media m ON m.id=x.media_id WHERE ((`+where+`) OR (`+name+`))
+		AND x.updated_at > `+itoa64(time.Now().Add(-6*time.Hour).Unix()), append(args, r.Title)...).Scan(&n)
 	return n > 0, err
 }
 
@@ -227,10 +236,11 @@ func itoa64(n int64) string {
 	return string(b)
 }
 
-// TitleLibraries lists the Plex libraries holding a title.
+// TitleLibraries lists the Plex libraries holding a title, linking plays to
+// the archive by Plex guid.
 func (s *Store) TitleLibraries(ctx context.Context, r DeleteRule) ([]string, error) {
 	where, args := s.ruleWhere(r)
-	rows, err := s.DB.QueryContext(ctx, `SELECT DISTINCT i.section_title FROM plex_items i JOIN media m ON m.id=i.media_id
+	rows, err := s.DB.QueryContext(ctx, `SELECT DISTINCT i.section_title FROM plex_items i JOIN media m ON m.plex_guid=i.guid
 		WHERE i.section_title IS NOT NULL AND i.deleted_at IS NULL AND `+where, args...)
 	if err != nil {
 		return nil, err

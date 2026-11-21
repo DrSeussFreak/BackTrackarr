@@ -86,6 +86,8 @@ Sonarr, Radarr or Whisparr that owns it, and unmonitored first so it isn't
 downloaded again.
 
 - Scope it to chosen servers and Plex libraries, by include or exclude list.
+- Only plays matched by a real id count. A same-named show, remake or play with
+  no ids never unlocks a delete.
 - A double episode is kept until everyone has watched both halves.
 - Titles someone is watching are skipped, and each rule has a waiting period.
 - At most 25 files are removed per run, and every deletion is logged.

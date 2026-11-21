@@ -301,3 +301,76 @@ func TestNowPlaying(t *testing.T) {
 		t.Fatalf("a stopped session should disappear: %+v", rows)
 	}
 }
+
+func TestAutoDeleteNeverMatchesByNameAlone(t *testing.T) {
+	arr := &fakeArr{}
+	srv := httptest.NewServer(arr)
+	defer srv.Close()
+	e, st := deleteEngine(t, srv.URL)
+	ctx := context.Background()
+	e.SetAutoDelete(ctx, true)
+	old := time.Now().Add(-72 * time.Hour)
+	// Same name as the rule's titles, but no ids, or a different show's id.
+	noIDs := model.Media{Kind: model.Episode, Title: "Pilot", ShowTitle: "Andor", Season: 1, Episode: 1}
+	otherShow := model.Media{Kind: model.Episode, Title: "Other", ShowTitle: "Andor", Season: 1, Episode: 2, ShowIDs: model.IDs{TVDB: 111}}
+	remake := model.Media{Kind: model.Movie, Title: "Heat", Year: 1986, IDs: model.IDs{TMDB: 222}}
+	noIDMovie := model.Media{Kind: model.Movie, Title: "Heat"}
+	for _, m := range []*model.Media{&noIDs, &otherShow, &remake, &noIDMovie} {
+		if err := st.UpsertMedia(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.RecordPlay(ctx, m.ID, "Alex", old, "test", "", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	st.SaveDeleteRule(ctx, "sonarr", 5, []string{"Alex"}, true, 0)
+	st.SaveDeleteRule(ctx, "radarr", 7, []string{"Alex"}, true, 0)
+	if list, _, err := e.PreviewAutoDelete(ctx); err != nil || len(list) != 0 {
+		t.Fatalf("a same-named title unlocked a delete: %+v %v", list, err)
+	}
+	e.RunAutoDeleteOnce(ctx, func(string) {})
+	if len(arr.writes()) != 0 {
+		t.Fatalf("wrong file touched: %v", arr.writes())
+	}
+}
+
+func TestAutoDeleteLibraryFilter(t *testing.T) {
+	arr := &fakeArr{}
+	srv := httptest.NewServer(arr)
+	defer srv.Close()
+	e, st := deleteEngine(t, srv.URL)
+	ctx := context.Background()
+	e.SetAutoDelete(ctx, true)
+	m := model.Media{Kind: model.Movie, Title: "Heat", Year: 1995, IDs: model.IDs{TMDB: 949}, PlexGUID: "plex://movie/abc"}
+	if err := st.UpsertMedia(ctx, &m); err != nil {
+		t.Fatal(err)
+	}
+	st.RecordPlay(ctx, m.ID, "Alex", time.Now().Add(-72*time.Hour), "test", "", false)
+	st.SaveDeleteRule(ctx, "radarr", 7, []string{"Alex"}, true, 0)
+	// As the archiver writes it: linked by guid, with no media_id.
+	if _, err := st.DB.Exec(`INSERT INTO plex_items(server_id,rating_key,type,guid,section_title,seen_at) VALUES('s','1','movie','plex://movie/abc','Movies',1)`); err != nil {
+		t.Fatal(err)
+	}
+	count := func(sc DeleteScope) int {
+		t.Helper()
+		e.SetAutoDeleteScope(ctx, sc)
+		list, _, err := e.PreviewAutoDelete(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(list)
+	}
+	for name, c := range map[string]struct {
+		sc   DeleteScope
+		want int
+	}{
+		"include match": {DeleteScope{LibraryMode: "include", Libraries: []string{"movies"}}, 1},
+		"include other": {DeleteScope{LibraryMode: "include", Libraries: []string{"Kids"}}, 0},
+		"exclude match": {DeleteScope{LibraryMode: "exclude", Libraries: []string{"Movies"}}, 0},
+		"exclude other": {DeleteScope{LibraryMode: "exclude", Libraries: []string{"Kids"}}, 1},
+	} {
+		if got := count(c.sc); got != c.want {
+			t.Errorf("%s: %d ready, want %d", name, got, c.want)
+		}
+	}
+}

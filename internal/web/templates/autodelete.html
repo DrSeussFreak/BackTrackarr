@@ -23,7 +23,7 @@
         <option value="exclude" {{if eq .Scope.LibraryMode "exclude"}}selected{{end}}>All except the checked libraries</option>
       </select>
       {{range .Libraries}}<label class="check"><input type="checkbox" name="libraries" value="{{.Name}}" {{if .Checked}}checked{{end}}> {{.Name}}</label>{{else}}<p class="muted small">Libraries appear after the first Plex archive.</p>{{end}}
-      <p class="muted small">With a library filter on, a title in an unknown library is never deleted.</p>
+      <p class="muted small">With a library filter on, a title whose library is unknown is never deleted. Titles are linked to libraries through their Plex plays.</p>
     </fieldset>
   </div>
   <button onclick="const m=this.form.master; return !m.checked || {{if .On}}true{{else}}confirm('Turn on auto-delete? Files for titles with a rule will be permanently removed once all assigned users watch them.'){{end}}">Save</button>
