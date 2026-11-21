@@ -1,3 +1,5 @@
+<p align="center"><img src="internal/web/static/logo.svg" alt="BackTrackarr logo" width="180"></p>
+
 # BackTrackarr
 
 A self-hosted, Trakt-style watch history for Plex and your streaming
@@ -241,6 +243,28 @@ Upload a **CLZ Comics** CSV export on the **Comics** page, or drop it into
 `/data/import/clz`. Every column is kept. Re-importing is safe: a later
 read date is stored as a reread, and fields missing from a smaller export
 are not wiped.
+
+## Books, audiobooks and games
+
+The **Books** and **Games** pages track every read, listen and play as its
+own row, with the source's raw data kept. BackTrackarr only reads from these
+services. Connect them on the **Settings** page:
+
+- **Books and audiobooks:** Audiobookshelf, Komga, Kavita, Hardcover, Open
+  Library, plus Goodreads and StoryGraph CSV exports.
+- **Games:** Steam, RetroAchievements, RomM, plus Playnite exports, which are
+  the route for GOG, PlayStation, Xbox and Epic.
+
+See [docs/MEDIA_SOURCES.md](docs/MEDIA_SOURCES.md) for each source's limits,
+and for why Audible, Calibre and the consoles have no direct connection.
+
+## Settings and backups
+
+Everything is configured on the **Settings** page and stored in the database,
+so a stack needs no environment variables. **Back up settings** downloads an
+encrypted file with every key. Daily database backups are integrity-checked
+before older ones are rotated out. Outbound calls are throttled per site to
+avoid rate limits and lockouts.
 
 ## Recommendations (Claude and Gemini)
 

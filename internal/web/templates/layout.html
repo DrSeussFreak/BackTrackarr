@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} · BackTrackarr</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/static/logo-512.png" type="image/png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<meta name="theme-color" content="#17171a">
 <link rel="stylesheet" href="/static/app.css">
 {{if .Refresh}}<meta http-equiv="refresh" content="4">{{end}}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="/">BackTrackarr</a>
+  <a class="brand" href="/"><img src="/static/favicon.svg" alt="" width="28" height="28">BackTrackarr</a>
   {{if not .Bare}}
   <nav>
     <a href="/" {{if eq .Nav "dash"}}class="on"{{end}}>Dashboard</a>
@@ -17,8 +21,11 @@
     <a href="/streaming" {{if eq .Nav "streaming"}}class="on"{{end}}>Streaming</a>
     <a href="/library" {{if eq .Nav "library"}}class="on"{{end}}>Library</a>
     <a href="/comics" {{if eq .Nav "comics"}}class="on"{{end}}>Comics</a>
+    <a href="/books" {{if eq .Nav "books"}}class="on"{{end}}>Books</a>
+    <a href="/games" {{if eq .Nav "games"}}class="on"{{end}}>Games</a>
     <a href="/recs" {{if eq .Nav "recs"}}class="on"{{end}}>For you</a>
     <a href="/sync" {{if eq .Nav "sync"}}class="on"{{end}}>Sync</a>
+    <a href="/settings" {{if eq .Nav "settings"}}class="on"{{end}}>Settings</a>
     <a href="/security" {{if eq .Nav "security"}}class="on"{{end}}>Security</a>
   </nav>
   <form method="post" action="/logout" class="signout"><button class="link" title="Sign out">Sign out</button></form>
@@ -51,6 +58,23 @@
   </table>
 </section>
 {{end}}
+{{end}}
+
+{{define "shelfevents"}}
+<table class="plays">
+  <thead><tr><th>When</th><th>Title</th><th>What</th><th>Time</th><th>Source</th></tr></thead>
+  <tbody>
+  {{range .}}
+    <tr>
+      <td class="nowrap mono">{{ts .At}}</td>
+      <td><span class="tag {{.MediaType}}">{{.MediaType}}</span> {{.Title}}{{if .Creator}} <span class="muted small">{{.Creator}}</span>{{end}}{{if .Platform}} <span class="muted small">{{.Platform}}</span>{{end}}</td>
+      <td class="small">{{.Kind}}</td>
+      <td class="mono small">{{if .DurationS}}{{hm .DurationS}}{{end}}</td>
+      <td class="muted">{{.Source}}{{if .Device}} · {{.Device}}{{end}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
 {{end}}
 
 {{define "playtable"}}

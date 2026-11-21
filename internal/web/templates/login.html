@@ -1,5 +1,6 @@
 {{define "content"}}
 <div class="auth-box panel">
+  <img class="auth-logo" src="/static/logo.svg" alt="BackTrackarr logo">
   <h1>Sign in</h1>
   {{with .Error}}<p class="err">{{.}}</p>{{end}}
   {{if .HasPassword}}

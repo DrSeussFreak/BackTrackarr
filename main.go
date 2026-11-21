@@ -4,13 +4,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 	_ "time/tzdata" // correct local times in minimal containers
@@ -21,6 +24,7 @@ import (
 	"github.com/DrSeussFreak/BackTrackarr/internal/plex"
 	"github.com/DrSeussFreak/BackTrackarr/internal/sinks"
 	"github.com/DrSeussFreak/BackTrackarr/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/throttle"
 	"github.com/DrSeussFreak/BackTrackarr/internal/web"
 )
 
@@ -33,33 +37,74 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck(cfg))
 	}
-	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
-	if err := run(cfg, log); err != nil {
-		log.Error("fatal", "err", err)
-		os.Exit(1)
+	// Saving on the Settings page ends run, and the loop starts it again with
+	// the new values, without restarting the process or container.
+	for {
+		again, err := run()
+		if err != nil {
+			slog.New(slog.NewTextHandler(os.Stdout, nil)).Error("fatal", "err", err)
+			os.Exit(1)
+		}
+		if !again {
+			return
+		}
 	}
 }
 
-func run(cfg *config.Config, log *slog.Logger) error {
+// run serves until shutdown. It returns true if settings changed and the app
+// should start again.
+func run() (bool, error) {
+	cfg := config.Load() // the data folder always comes from the environment
 	st, err := store.Open(cfg.DataDir)
 	if err != nil {
-		return err
+		return false, err
+	}
+	useDataTemp(cfg.DataDir)
+	saved, err := st.Settings(context.Background())
+	if err != nil {
+		st.Close()
+		return false, err
+	}
+	passwordHash := saved[config.AdminPasswordKey]
+	if config.IgnoreSaved() {
+		saved = nil
+		if cfg.AdminPassword != "" {
+			passwordHash = "" // recovery: the environment's password applies
+		}
+	}
+	config.SetOverrides(saved)
+	cfg = config.Load()
+	if passwordHash != "" {
+		cfg.AdminPassword = passwordHash
+	}
+	if cfg.TimeZone != "" {
+		if loc, err := time.LoadLocation(cfg.TimeZone); err == nil {
+			time.Local = loc
+		}
+	}
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	if config.IgnoreSaved() {
+		log.Warn("SETTINGS_IGNORE: using environment variables only; saved settings are kept but not applied")
 	}
 	st.CompressBackups = cfg.BackupCompress
 	if cfg.AuthReset {
 		if err := st.ResetMFA(context.Background(), cfg.AdminUser); err != nil {
-			return err
+			st.Close()
+			return false, err
 		}
 		log.Warn("AUTH_RESET: removed MFA, passkeys and sessions; sign in with the password, then remove AUTH_RESET", "user", cfg.AdminUser)
 	}
 	defer st.Close()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := context.WithCancel(sigCtx)
+	defer cancel()
+	var restart atomic.Bool
 
 	if cfg.WebhookToken == "" {
 		if cfg.WebhookToken, err = st.EnsureSecret(ctx, "webhook_token"); err != nil {
-			return err
+			return false, err
 		}
 	}
 	var px *plex.Client
@@ -68,6 +113,7 @@ func run(cfg *config.Config, log *slog.Logger) error {
 		px.AllowWrites = cfg.PlexAllowWrites
 		px.PlexTV = cfg.PlexTVURL
 	}
+	limiter := setupThrottle(cfg, st)
 	all := sinks.Build(cfg, st)
 	eng := core.New(ctx, cfg, st, px, all, log)
 
@@ -86,6 +132,10 @@ func run(cfg *config.Config, log *slog.Logger) error {
 	}
 	go eng.RunCLZWatcher(ctx)
 	go eng.RunStreamWatcher(ctx)
+	go eng.RunShelfWatcher(ctx)
+	if cfg.Shelf.SyncEvery > 0 && eng.HasShelfSources(ctx) {
+		go eng.RunShelfSync(ctx)
+	}
 	if cfg.TrackerPull > 0 && (cfg.TraktClientID != "" || cfg.SimklClientID != "") {
 		go eng.RunTrackerPull(ctx)
 	}
@@ -93,17 +143,25 @@ func run(cfg *config.Config, log *slog.Logger) error {
 		go eng.RunArrArchiver(ctx)
 	}
 
+	ui := web.New(cfg, st, eng, log)
+	ui.Throttle = limiter
+	ui.Restart = func() {
+		restart.Store(true)
+		cancel()
+	}
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           web.New(cfg, st, eng, log).Handler(),
+		Handler:           ui.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       2 * time.Minute,
 		IdleTimeout:       2 * time.Minute,
 	}
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		<-ctx.Done()
-		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+		sctx, done := context.WithTimeout(context.Background(), 10*time.Second)
+		defer done()
 		srv.Shutdown(sctx)
 	}()
 
@@ -112,7 +170,7 @@ func run(cfg *config.Config, log *slog.Logger) error {
 		names = append(names, s.Name())
 	}
 	if cfg.AdminPassword == "" {
-		log.Warn("ADMIN_PASSWORD is not set; the web UI is open to anyone who can reach it")
+		log.Warn("no password is set; the web UI is open to anyone who can reach it. Set one on the Settings page")
 	}
 	if cfg.EnvFile != "" {
 		log.Info("settings file loaded", "file", cfg.EnvFile)
@@ -120,9 +178,55 @@ func run(cfg *config.Config, log *slog.Logger) error {
 	log.Info("backtrackarr started", "version", model.Version, "listen", cfg.Listen, "data", cfg.DataDir,
 		"services", strings.Join(names, ","), "plex_server", px != nil, "plex_writes", cfg.PlexAllowWrites)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+		return false, err
 	}
-	return nil
+	<-stopped
+	return restart.Load() && sigCtx.Err() == nil, nil
+}
+
+// useDataTemp puts temp files (large uploads, big sorts, backups) on the data
+// volume. The container image has no /tmp, and keeping them out of memory is
+// what lets large imports fit the container's memory limit.
+func useDataTemp(dataDir string) {
+	dir := filepath.Join(dataDir, "tmp")
+	_ = os.RemoveAll(dir) // only leftovers from an earlier run
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return
+	}
+	os.Setenv("TMPDIR", abs)
+	os.Setenv("SQLITE_TMPDIR", abs)
+}
+
+// setupThrottle paces all outbound requests. Your own servers are exempt, and
+// a service's back-off period is saved so a restart can't break it.
+func setupThrottle(cfg *config.Config, st *store.Store) *throttle.Transport {
+	t := throttle.Install()
+	c := cfg.Shelf
+	own := []string{cfg.PlexURL, cfg.FloppyURL, c.AudiobookshelfURL, c.KomgaURL, c.KavitaURL, c.RommURL}
+	for _, a := range cfg.Arr {
+		own = append(own, a.URL)
+	}
+	for _, m := range cfg.MediaServers {
+		own = append(own, m.URL)
+	}
+	t.SetExempt(own)
+	const key = "throttle|cooldowns"
+	if v, err := st.GetKV(context.Background(), key); err == nil && v != "" {
+		var saved map[string]int64
+		if json.Unmarshal([]byte(v), &saved) == nil {
+			t.Restore(saved)
+		}
+	}
+	t.OnChange(func(m map[string]int64) {
+		if b, err := json.Marshal(m); err == nil {
+			_ = st.SetKV(context.Background(), key, string(b))
+		}
+	})
+	return t
 }
 
 func healthcheck(cfg *config.Config) int {

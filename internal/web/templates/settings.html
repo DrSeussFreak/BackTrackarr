@@ -1,0 +1,81 @@
+{{define "content"}}
+<div class="head"><h1>Settings</h1></div>
+{{if .Ignored}}<p class="flash">SETTINGS_IGNORE is on, so saved settings are not being used. Remove it and restart when you're done.</p>{{end}}
+<p class="muted small">Saved values replace environment variables and apply within a few seconds, with no redeploy. Secrets are never shown again: leave a secret blank to keep it. They are stored unencrypted in the database and its backups, so keep the data volume private.</p>
+{{if .EnvCount}}
+<section class="panel">
+  <h2>Move settings into the app</h2>
+  <p class="small">{{.EnvCount}} values still come from your stack's environment variables. Move them here so they're stored in the database and included in backups. Your stack can then drop them.</p>
+  <form method="post" action="/settings/adopt"><button>Move {{.EnvCount}} values into the app</button></form>
+</section>
+{{end}}
+
+{{if .Paused}}
+<section class="panel">
+  <h2>External services paused</h2>
+  <p class="muted small">BackTrackarr stopped calling these to avoid a rate limit or lockout, and resumes on its own.</p>
+  <table>{{range .Paused}}<tr><td><b>{{.Host}}</b><div class="muted small">{{.Reason}}</div></td><td class="mono small">until {{.Until.Local.Format "2006-01-02 15:04:05"}}</td>
+    <td><form method="post" action="/settings/throttle/clear"><input type="hidden" name="host" value="{{.Host}}"><button class="link" title="Use after fixing a key or token">Resume now</button></form></td></tr>{{end}}</table>
+</section>
+{{end}}
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Sign-in password</h2>
+    <form method="post" action="/settings/password" autocomplete="off">
+      {{if .HasPassword}}<p><label class="small">Current password<br><input type="password" name="current" autocomplete="current-password" required></label></p>{{else}}<p class="bad small">No password is set, so anyone who can reach this page can use it.</p>{{end}}
+      <p><label class="small">New password (12 or more characters)<br><input type="password" name="new" minlength="12" autocomplete="new-password" required></label></p>
+      <p><label class="small">Confirm new password<br><input type="password" name="confirm" minlength="12" autocomplete="new-password" required></label></p>
+      <button>Change password</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Back up settings</h2>
+    <p class="muted small">Downloads every setting and key, encrypted with your passphrase. It can't be recovered without it. Your history and connected Trakt or Simkl accounts are in the daily database backups instead.</p>
+    <form method="post" action="/settings/export" autocomplete="off" class="row">
+      <input type="password" name="passphrase" minlength="12" placeholder="Passphrase (12+ characters)" aria-label="Backup passphrase" autocomplete="new-password" required>
+      <button>Download</button>
+    </form>
+    <h2>Restore settings</h2>
+    <form method="post" action="/settings/import" enctype="multipart/form-data" autocomplete="off" class="row" onsubmit="return confirm('Replace current settings with this backup?')">
+      <input type="file" name="file" accept=".btsettings" required aria-label="Settings backup file">
+      <input type="password" name="passphrase" placeholder="Passphrase" aria-label="Restore passphrase" autocomplete="off" required>
+      <button>Restore</button>
+    </form>
+  </section>
+</div>
+
+<form method="post" action="/settings" autocomplete="off">
+  {{range .Groups}}
+  <details class="panel" {{if eq .Name "General"}}open{{end}}>
+    <summary><b>{{.Name}}</b></summary>
+    <table>
+      {{range .Rows}}
+      <tr>
+        <td><label for="{{.Key}}"><b>{{.Label}}</b></label>{{if .Help}}<div class="muted small">{{.Help}}</div>{{end}}<div class="muted small mono">{{.Key}}</div></td>
+        <td>
+          {{if eq .Type "bool"}}
+            <select id="{{.Key}}" name="{{.Key}}"><option value="true" {{if eq .Value "true"}}selected{{end}}>On</option><option value="false" {{if eq .Value "false"}}selected{{end}}>Off</option></select>
+          {{else if eq .Type "choice"}}
+            {{$v := .Value}}{{$d := .Default}}
+            <select id="{{.Key}}" name="{{.Key}}">{{range .Options}}<option value="{{.}}" {{if or (eq . $v) (and (eq $v "") (eq . $d))}}selected{{end}}>{{.}}</option>{{end}}</select>
+          {{else if eq .Type "secret"}}
+            <input id="{{.Key}}" name="{{.Key}}" type="password" autocomplete="new-password" placeholder="{{if .IsSet}}•••••• set{{else}}not set{{end}}">
+            {{if .IsSet}}<label class="small"><input type="checkbox" name="clear_{{.Key}}" value="1"> clear</label>{{end}}
+          {{else}}
+            <input id="{{.Key}}" name="{{.Key}}" type="{{if or (eq .Type "number") (eq .Type "percent")}}number{{else}}text{{end}}" {{if eq .Type "percent"}}min="1" max="100" step="any"{{else if eq .Type "number"}}min="0" step="1"{{end}} value="{{.Value}}" placeholder="{{.Default}}">
+          {{end}}
+        </td>
+        <td class="small nowrap">
+          {{if eq .Source "saved"}}<span class="ok">saved</span> <label class="small"><input type="checkbox" name="reset_{{.Key}}" value="1"> undo</label>
+          {{else if eq .Source "env"}}<span class="warn">from env</span>{{else}}<span class="muted">default</span>{{end}}
+        </td>
+      </tr>
+      {{end}}
+    </table>
+  </details>
+  {{end}}
+  <p><button>Save and apply</button></p>
+</form>
+<p class="muted small">Only recovery switches stay outside the app. If a saved value locks you out, start once with <code>SETTINGS_IGNORE=true</code> and <code>ADMIN_PASSWORD</code> set. If you lose your authenticator, use <code>AUTH_RESET=true</code>.</p>
+{{end}}

@@ -20,7 +20,7 @@ COPY --from=build /out/backtrackarr /backtrackarr
 COPY --from=build --chown=65532:65532 /out/data /data
 ENV DATA_DIR=/data \
     LISTEN=:8787 \
-    GOMEMLIMIT=96MiB \
+    GOMEMLIMIT=72MiB \
     GOGC=50
 EXPOSE 8787
 VOLUME ["/data"]

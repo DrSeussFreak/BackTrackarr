@@ -1,5 +1,26 @@
 # Settings worksheet
 
+> **Settings live in the app.** Open **Settings** to change anything. Values
+> are stored in the database, apply within seconds, and need no redeploy.
+>
+> - **Moving an existing install:** click **Move values into the app**, then
+>   switch to [stack-app-settings.yml](../deploy/portainer/stack-app-settings.yml),
+>   which has no environment variables.
+> - **New install:** start it, then set a password on **Settings** right away.
+>   Until then, anyone who can reach the app can use it.
+> - **Backups:** **Back up settings** downloads an encrypted file with every
+>   setting and key. The daily database backups include them too, unencrypted,
+>   so keep `/data` private.
+> - **Environment-only:** `DATA_DIR`, `LISTEN`, the recovery switches
+>   `AUTH_RESET` and `SETTINGS_IGNORE`, and the alternate API addresses
+>   (`*_BASE_URL`, `PLEXTV_URL`), which stay out of the UI so a saved key can't
+>   be redirected to another host.
+> - **Locked out by a saved value?** Start once with `SETTINGS_IGNORE=true` and
+>   `ADMIN_PASSWORD` set. Saved values are kept but not used until you remove it.
+>
+> The rest of this page describes each setting. Its names match the small
+> labels on the Settings page.
+
 Answer the questions you need. Every answer becomes one `NAME=value` line,
 either in your `.env` file (Docker Compose) or in Portainer's environment
 variables (see [Portainer](#portainer) at the end).
@@ -224,6 +245,35 @@ exports. Default `/data/import/clz`.
 
 **`BACKUP_COMPRESS`**: Compress backups? Default `true`. Leave it on, since a
 5 GB database shrinks to roughly 1–2 GB.
+
+---
+
+## 10. Books, audiobooks and games (optional)
+
+All of these are on the **Settings** page. See
+[MEDIA_SOURCES.md](MEDIA_SOURCES.md) for what each source provides and its
+limits. BackTrackarr only reads from them.
+
+| Source | Settings |
+|---|---|
+| Audiobookshelf | `AUDIOBOOKSHELF_URL`, `AUDIOBOOKSHELF_TOKEN` |
+| Komga | `KOMGA_URL`, `KOMGA_API_KEY` |
+| Kavita | `KAVITA_URL`, `KAVITA_API_KEY` |
+| Hardcover | `HARDCOVER_TOKEN` |
+| Open Library | `OPENLIBRARY_USER` (reading log must be public) |
+| Steam | `STEAM_API_KEY`, `STEAM_ID` (the 17-digit id) |
+| RetroAchievements | `RETROACHIEVEMENTS_USER`, `RETROACHIEVEMENTS_API_KEY` |
+| RomM | `ROMM_URL`, `ROMM_TOKEN` |
+
+Optional:
+- **`SHELF_SYNC_MINUTES`**: How often to read these sources. `0` = off.
+  Default `180`.
+- **`SHELF_USER`**: Which BackTrackarr user reads and plays belong to.
+  Default: the Plex owner.
+- **`BOOKS_IMPORT_DIR`**: Folder watched for Goodreads, StoryGraph and other
+  book CSVs. Default `/data/import/books`.
+- **`GAMES_IMPORT_DIR`**: Folder watched for Playnite and other game exports.
+  Default `/data/import/games`.
 
 ---
 

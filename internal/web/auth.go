@@ -209,8 +209,7 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				http.Error(w, "too many failed attempts, try again later", http.StatusTooManyRequests)
 				return
 			}
-			if s.cfg.AdminPassword != "" && subtle.ConstantTimeCompare([]byte(u), []byte(s.cfg.AdminUser)) == 1 &&
-				subtle.ConstantTimeCompare([]byte(p), []byte(s.cfg.AdminPassword)) == 1 {
+			if subtle.ConstantTimeCompare([]byte(u), []byte(s.cfg.AdminUser)) == 1 && auth.CheckPassword(s.cfg.AdminPassword, p) {
 				if s.mfaEnabled(ctx) {
 					http.Error(w, "two-step sign-in is on: sign in on the login page, or use an API token (Security page)", http.StatusUnauthorized)
 					return
@@ -292,8 +291,7 @@ func (s *Server) loginPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, p := r.FormValue("username"), r.FormValue("password")
-	ok := s.cfg.AdminPassword != "" && subtle.ConstantTimeCompare([]byte(u), []byte(s.cfg.AdminUser)) == 1 &&
-		subtle.ConstantTimeCompare([]byte(p), []byte(s.cfg.AdminPassword)) == 1
+	ok := subtle.ConstantTimeCompare([]byte(u), []byte(s.cfg.AdminUser)) == 1 && auth.CheckPassword(s.cfg.AdminPassword, p)
 	if !ok {
 		s.signin.limiter.Fail(s.clientIP(r))
 		s.log.Warn("failed sign-in", "ip", s.clientIP(r))
@@ -683,7 +681,7 @@ func (s *Server) securityPage(w http.ResponseWriter, r *http.Request) { s.render
 
 func (s *Server) totpStart(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.AdminPassword == "" {
-		s.flash(w, r, "/security", "Set ADMIN_PASSWORD first: an authenticator code is a second step after the password.")
+		s.flash(w, r, "/security", "Set a password on the Settings page first: an authenticator code is a second step after the password.")
 		return
 	}
 	if err := s.st.SetPendingTOTP(r.Context(), s.cfg.AdminUser, auth.NewTOTPSecret()); err != nil {
@@ -854,7 +852,7 @@ func (s *Server) passkeyDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ps, _ := s.st.Passkeys(ctx, s.cfg.AdminUser)
 	if len(ps) == 1 && s.cfg.AdminPassword == "" {
-		s.flash(w, r, "/security", "That's your only way to sign in. Set ADMIN_PASSWORD or add another passkey first.")
+		s.flash(w, r, "/security", "That's your only way to sign in. Set a password on the Settings page or add another passkey first.")
 		return
 	}
 	if err := s.st.DeletePasskey(ctx, s.cfg.AdminUser, r.PathValue("id")); err != nil {

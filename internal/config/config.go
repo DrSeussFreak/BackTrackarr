@@ -18,6 +18,7 @@ type Config struct {
 	AdminPassword string
 	WebhookToken  string
 	LogLevel      slog.Level
+	TimeZone      string // from TZ or the Settings page
 
 	// A play counts as "watched" once progress reaches this percentage.
 	WatchedPercent float64
@@ -80,10 +81,68 @@ type Config struct {
 	StreamImportDir string
 	EnvFile         string // settings file that was loaded, if any
 
+	Shelf ShelfConfig // books, audiobooks and games
+
 	// Sign-in. AuthReset removes MFA and passkeys at startup (lost authenticator).
 	SessionTTL time.Duration
 	TrustProxy bool
 	AuthReset  bool
+}
+
+// ShelfConfig holds the book, audiobook and game sources. BackTrackarr only
+// reads from them. Each covers one account.
+type ShelfConfig struct {
+	SyncEvery      time.Duration
+	User           string // local user for reads and plays; default: the Plex owner
+	BooksImportDir string
+	GamesImportDir string
+
+	AudiobookshelfURL   string
+	AudiobookshelfToken string
+	KomgaURL            string
+	KomgaKey            string
+	KavitaURL           string
+	KavitaKey           string
+	HardcoverURL        string
+	HardcoverToken      string
+	OpenLibraryURL      string
+	OpenLibraryUser     string
+	SteamURL            string
+	SteamKey            string
+	SteamID             string
+	RetroURL            string
+	RetroUser           string
+	RetroKey            string
+	RommURL             string
+	RommToken           string
+}
+
+func loadShelf(dataDir string) ShelfConfig {
+	addr := func(k, def string) string { return strings.TrimRight(env(k, def), "/") }
+	return ShelfConfig{
+		SyncEvery:           time.Duration(envInt("SHELF_SYNC_MINUTES", 180)) * time.Minute,
+		User:                env("SHELF_USER", ""),
+		BooksImportDir:      env("BOOKS_IMPORT_DIR", dataDir+"/import/books"),
+		GamesImportDir:      env("GAMES_IMPORT_DIR", dataDir+"/import/games"),
+		AudiobookshelfURL:   addr("AUDIOBOOKSHELF_URL", ""),
+		AudiobookshelfToken: env("AUDIOBOOKSHELF_TOKEN", ""),
+		KomgaURL:            addr("KOMGA_URL", ""),
+		KomgaKey:            env("KOMGA_API_KEY", ""),
+		KavitaURL:           addr("KAVITA_URL", ""),
+		KavitaKey:           env("KAVITA_API_KEY", ""),
+		HardcoverURL:        addr("HARDCOVER_BASE_URL", "https://api.hardcover.app"),
+		HardcoverToken:      strings.TrimSpace(strings.TrimPrefix(env("HARDCOVER_TOKEN", ""), "Bearer ")),
+		OpenLibraryURL:      addr("OPENLIBRARY_BASE_URL", "https://openlibrary.org"),
+		OpenLibraryUser:     env("OPENLIBRARY_USER", ""),
+		SteamURL:            addr("STEAM_BASE_URL", "https://api.steampowered.com"),
+		SteamKey:            env("STEAM_API_KEY", ""),
+		SteamID:             env("STEAM_ID", ""),
+		RetroURL:            addr("RETROACHIEVEMENTS_BASE_URL", "https://retroachievements.org"),
+		RetroUser:           env("RETROACHIEVEMENTS_USER", ""),
+		RetroKey:            env("RETROACHIEVEMENTS_API_KEY", ""),
+		RommURL:             addr("ROMM_URL", ""),
+		RommToken:           env("ROMM_TOKEN", ""),
+	}
 }
 
 // MediaServer is a Jellyfin or Emby server that playlists can be copied to.
@@ -149,12 +208,14 @@ func Load() *Config {
 		TrackerPull:       time.Duration(envInt("TRACKER_PULL_MINUTES", 60)) * time.Minute,
 		TrackerPullUser:   env("TRACKER_PULL_USER", ""),
 		EnvFile:           envFile,
+		TimeZone:          env("TZ", ""),
 		SessionTTL:        time.Duration(envInt("SESSION_DAYS", 30)) * 24 * time.Hour,
 		TrustProxy:        envBool("TRUST_PROXY", false),
 		AuthReset:         envBool("AUTH_RESET", false),
 	}
 	c.ClzImportDir = env("CLZ_IMPORT_DIR", c.DataDir+"/import/clz")
 	c.StreamImportDir = env("STREAMING_IMPORT_DIR", c.DataDir+"/import/streaming")
+	c.Shelf = loadShelf(c.DataDir)
 	c.Arr = loadArr()
 	c.MediaServers = loadMediaServers()
 	switch strings.ToLower(env("LOG_LEVEL", "info")) {
@@ -267,6 +328,12 @@ func loadArr() []ArrInstance {
 }
 
 func env(k, def string) string {
+	if v, ok := override(k); ok { // saved on the Settings page; empty = default
+		if v = strings.TrimSpace(v); v != "" {
+			return v
+		}
+		return def
+	}
 	if v, ok := os.LookupEnv(k); ok && strings.TrimSpace(v) != "" {
 		return strings.TrimSpace(v)
 	}

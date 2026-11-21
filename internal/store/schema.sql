@@ -264,6 +264,69 @@ CREATE TABLE IF NOT EXISTS recs (
 CREATE INDEX IF NOT EXISTS recs_run ON recs(run_id)
 ;
 
+-- ---------- books, audiobooks and games ----------
+-- One row per title per source. raw is the source's JSON or CSV row,
+-- zlib-compressed. norm_key lets stats merge the same title across sources,
+-- but the rows themselves are never merged.
+CREATE TABLE IF NOT EXISTS shelf_items (
+  id            INTEGER PRIMARY KEY,
+  media_type    TEXT    NOT NULL CHECK (media_type IN ('book','audiobook','game')),
+  source        TEXT    NOT NULL,
+  ext_key       TEXT    NOT NULL,
+  title         TEXT    NOT NULL,
+  norm_key      TEXT    NOT NULL,
+  creator       TEXT,
+  series        TEXT,
+  platform      TEXT,
+  isbn          TEXT,
+  asin          TEXT,
+  year          INTEGER,
+  pages         INTEGER,
+  duration_s    INTEGER,
+  status        TEXT,
+  rating        REAL,
+  progress      REAL,
+  playtime_s    INTEGER,
+  last_activity INTEGER,
+  raw           BLOB,
+  first_seen    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL,
+  UNIQUE (source, ext_key)
+);
+CREATE INDEX IF NOT EXISTS shelf_items_recent ON shelf_items(media_type, COALESCE(last_activity,0) DESC, title COLLATE NOCASE, id);
+CREATE INDEX IF NOT EXISTS shelf_items_norm   ON shelf_items(media_type, norm_key);
+
+-- Every read, listen or play is its own row. kind: session (time spent),
+-- finish (a completed read or game), play (activity without a duration),
+-- baseline (lifetime playtime when a game was first seen). at = 0 means the
+-- source counted a read but gave no date.
+CREATE TABLE IF NOT EXISTS shelf_events (
+  id          INTEGER PRIMARY KEY,
+  item_id     INTEGER NOT NULL REFERENCES shelf_items(id) ON DELETE CASCADE,
+  user        TEXT    NOT NULL DEFAULT '',
+  kind        TEXT    NOT NULL CHECK (kind IN ('session','finish','play','baseline')),
+  ext_id      TEXT    NOT NULL,
+  at          INTEGER NOT NULL,
+  started_at  INTEGER,
+  duration_s  INTEGER,
+  progress    REAL,
+  device      TEXT,
+  source      TEXT    NOT NULL,
+  raw         BLOB,
+  UNIQUE (item_id, ext_id)
+);
+CREATE INDEX IF NOT EXISTS shelf_events_at   ON shelf_events(at);
+CREATE INDEX IF NOT EXISTS shelf_events_kind ON shelf_events(kind, at);
+CREATE INDEX IF NOT EXISTS shelf_events_item ON shelf_events(item_id, kind);
+
+-- ---------- settings saved from the web UI ----------
+-- Override environment variables. An empty value means "use the default".
+CREATE TABLE IF NOT EXISTS settings (
+  k          TEXT PRIMARY KEY,
+  v          TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+) WITHOUT ROWID;
+
 -- ---------- sign-in (sessions, MFA, passkeys, API tokens) ----------
 -- Secrets that grant access (session ids, recovery codes, API tokens) are
 -- stored only as SHA-256 hashes.

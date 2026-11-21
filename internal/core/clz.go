@@ -136,60 +136,68 @@ func (e *Engine) ImportCLZ(ctx context.Context, r io.Reader, source string) (*Cl
 		}
 	}
 	res := &ClzResult{}
-	for {
-		rec, err := cr.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return res, fmt.Errorf("row %d: %w", res.Rows+2, err)
-		}
-		get := func(f string) string {
-			if i, ok := col[f]; ok && i < len(rec) {
-				return strings.TrimSpace(rec[i])
+	for done := false; !done; {
+		if err := e.st.InTx(ctx, func(ctx context.Context) error {
+			for n := 0; n < 500; n++ {
+				rec, err := cr.Read()
+				if err == io.EOF {
+					done = true
+					return nil
+				}
+				if err != nil {
+					return fmt.Errorf("row %d: %w", res.Rows+2, err)
+				}
+				get := func(f string) string {
+					if i, ok := col[f]; ok && i < len(rec) {
+						return strings.TrimSpace(rec[i])
+					}
+					return ""
+				}
+				raw := map[string]string{}
+				for i, h := range header {
+					if i < len(rec) && strings.TrimSpace(rec[i]) != "" {
+						raw[strings.TrimSpace(h)] = rec[i]
+					}
+				}
+				if len(raw) == 0 {
+					continue
+				}
+				res.Rows++
+				c := &store.Comic{Series: get("series"), Issue: get("issue"), Variant: get("variant"), Title: get("title"),
+					Publisher: get("publisher"), ReleaseDate: get("release"), CoverDate: get("cover"), Barcode: get("barcode"),
+					Format: get("format"), Raw: raw}
+				c.ExtKey = get("key")
+				if c.ExtKey == "" {
+					h := sha1.Sum([]byte(strings.ToLower(strings.Join([]string{c.Series, c.Issue, c.Variant, c.Barcode, c.Title}, "|"))))
+					c.ExtKey = "h:" + hex.EncodeToString(h[:10])
+				} else {
+					c.ExtKey = "clz:" + c.ExtKey
+				}
+				readAt, hasDate := parseDate(get("readdate"))
+				c.Read = truthy(get("read")) || hasDate
+				if v, err := strconv.ParseFloat(strings.TrimSpace(strings.Split(get("rating"), "/")[0]), 64); err == nil {
+					c.Rating = v
+				}
+				isNew, err := e.st.UpsertComic(ctx, c)
+				if err != nil {
+					return err
+				}
+				if isNew {
+					res.New++
+				} else {
+					res.Updated++
+				}
+				if hasDate {
+					if ok, err := e.st.AddComicRead(ctx, c.ID, readAt, source); err != nil {
+						return err
+					} else if ok {
+						res.Reads++
+					}
+				}
 			}
-			return ""
-		}
-		raw := map[string]string{}
-		for i, h := range header {
-			if i < len(rec) && strings.TrimSpace(rec[i]) != "" {
-				raw[strings.TrimSpace(h)] = rec[i]
-			}
-		}
-		if len(raw) == 0 {
-			continue
-		}
-		res.Rows++
-		c := &store.Comic{Series: get("series"), Issue: get("issue"), Variant: get("variant"), Title: get("title"),
-			Publisher: get("publisher"), ReleaseDate: get("release"), CoverDate: get("cover"), Barcode: get("barcode"),
-			Format: get("format"), Raw: raw}
-		c.ExtKey = get("key")
-		if c.ExtKey == "" {
-			h := sha1.Sum([]byte(strings.ToLower(strings.Join([]string{c.Series, c.Issue, c.Variant, c.Barcode, c.Title}, "|"))))
-			c.ExtKey = "h:" + hex.EncodeToString(h[:10])
-		} else {
-			c.ExtKey = "clz:" + c.ExtKey
-		}
-		readAt, hasDate := parseDate(get("readdate"))
-		c.Read = truthy(get("read")) || hasDate
-		if v, err := strconv.ParseFloat(strings.TrimSpace(strings.Split(get("rating"), "/")[0]), 64); err == nil {
-			c.Rating = v
-		}
-		isNew, err := e.st.UpsertComic(ctx, c)
-		if err != nil {
+			return nil
+		}); err != nil {
 			return res, err
-		}
-		if isNew {
-			res.New++
-		} else {
-			res.Updated++
-		}
-		if hasDate {
-			if ok, err := e.st.AddComicRead(ctx, c.ID, readAt, source); err != nil {
-				return res, err
-			} else if ok {
-				res.Reads++
-			}
 		}
 	}
 	return res, nil

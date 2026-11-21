@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -128,14 +130,27 @@ func (s *Server) streamingPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) streamingImport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<20)
+	// Spool to disk: the import runs after this request, and a large export
+	// shouldn't sit in memory.
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		s.flash(w, r, "/streaming", "Choose an export file to upload.")
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
 	f, hdr, err := r.FormFile("file")
 	if err != nil {
 		s.flash(w, r, "/streaming", "Choose an export file to upload.")
 		return
 	}
 	defer f.Close()
-	data, err := io.ReadAll(f)
+	spool, err := os.CreateTemp("", "backtrackarr-import-*")
 	if err != nil {
+		s.flash(w, r, "/streaming", "Upload failed: "+err.Error())
+		return
+	}
+	if _, err := io.Copy(spool, f); err != nil {
+		spool.Close()
+		os.Remove(spool.Name())
 		s.flash(w, r, "/streaming", "Upload failed: "+err.Error())
 		return
 	}
@@ -145,8 +160,14 @@ func (s *Server) streamingImport(w http.ResponseWriter, r *http.Request) {
 		opt.Service = ""
 	}
 	name := hdr.Filename
-	s.eng.Jobs.Start(s.eng.Context(), "import ← "+name, func(ctx context.Context, report func(string)) error {
-		res, err := s.eng.ImportStreaming(ctx, strings.NewReader(string(data)), opt, report)
+	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+name, func(ctx context.Context, report func(string)) error {
+		defer os.Remove(spool.Name())
+		defer spool.Close()
+		defer debug.FreeOSMemory()
+		if _, err := spool.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		res, err := s.eng.ImportStreaming(ctx, spool, opt, report)
 		if err != nil {
 			return err
 		}
@@ -161,6 +182,10 @@ func (s *Server) streamingImport(w http.ResponseWriter, r *http.Request) {
 		report(msg)
 		return nil
 	})
+	if !started { // the same file is already importing
+		spool.Close()
+		os.Remove(spool.Name())
+	}
 	back(w, r, "/streaming")
 }
 

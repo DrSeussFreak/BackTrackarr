@@ -45,4 +45,22 @@
   <h2>Recently watched <a class="more" href="/history{{if .User}}?user={{.User}}{{end}}">all history →</a></h2>
   {{template "playtable" .Recent}}
 </section>
+
+{{if or .Books .Games}}
+<section class="cards">
+  {{with .Books}}<div class="card"><div class="k"><a href="/books">Books and audiobooks</a></div><div class="v">{{num .Titles}}</div></div>
+  <div class="card"><div class="k">Reads</div><div class="v">{{num .Reads}}</div></div>
+  <div class="card"><div class="k">Rereads</div><div class="v">{{num .Repeats}}</div></div>
+  <div class="card"><div class="k">Time listened or read</div><div class="v">{{hours .Seconds}}</div></div>{{end}}
+  {{with .Games}}<div class="card"><div class="k"><a href="/games">Games</a></div><div class="v">{{num .Titles}}</div></div>
+  <div class="card"><div class="k">Games finished</div><div class="v">{{num .Finished}}</div></div>
+  <div class="card"><div class="k">Time played</div><div class="v">{{hours .Seconds}}</div></div>{{end}}
+</section>
+{{if .ShelfRecent}}
+<section class="panel">
+  <h2>Recently read and played</h2>
+  {{template "shelfevents" .ShelfRecent}}
+</section>
+{{end}}
+{{end}}
 {{end}}

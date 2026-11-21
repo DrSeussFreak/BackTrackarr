@@ -1,0 +1,88 @@
+{{define "content"}}
+<div class="head"><h1>{{.Title}}</h1><a class="btn ghost" href="/api{{.Path}}/export">Export (NDJSON)</a></div>
+
+{{if not .IsGames}}
+<p class="filters">
+  <a class="btn {{if ne .Type ""}}ghost{{end}}" href="/books">All</a>
+  <a class="btn {{if ne .Type "book"}}ghost{{end}}" href="/books?type=book">Books</a>
+  <a class="btn {{if ne .Type "audiobook"}}ghost{{end}}" href="/books?type=audiobook">Audiobooks</a>
+</p>
+{{end}}
+
+{{$games := .IsGames}}
+{{with .Stats}}
+<section class="cards">
+  <div class="card"><div class="k">{{if $games}}Games{{else}}Titles{{end}}</div><div class="v">{{num .Titles}}</div></div>
+  <div class="card"><div class="k">Finished</div><div class="v">{{num .Finished}}</div></div>
+  <div class="card"><div class="k">{{if $games}}Completions{{else}}Reads{{end}}</div><div class="v">{{num .Reads}}</div></div>
+  <div class="card"><div class="k">{{if $games}}Replays{{else}}Rereads{{end}}</div><div class="v">{{num .Repeats}}</div></div>
+  <div class="card"><div class="k">Sessions</div><div class="v">{{num .Sessions}}</div></div>
+  <div class="card"><div class="k">{{if $games}}Time played{{else}}Time listened or read{{end}}</div><div class="v">{{hours .Seconds}}</div></div>
+  <div class="card"><div class="k">Finished this year</div><div class="v">{{num .ThisYear}}</div></div>
+</section>
+{{end}}
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Sources</h2>
+    {{if .Sources}}
+    <table>
+      {{range .Sources}}<tr><td><b>{{.Label}}</b></td><td>{{if .Err}}<span class="bad">failed</span><div class="bad small">{{.Err}}</div>{{else if .Last}}<span class="ok">ok</span>{{else}}<span class="muted">not read yet</span>{{end}}</td><td class="mono small">{{ts .Last}}</td></tr>{{end}}
+    </table>
+    <form method="post" action="{{.Path}}/sync"><button>Read sources now</button></form>
+    {{else}}<p class="muted">No sources connected. Add them on the <a href="/settings">Settings</a> page.</p>{{end}}
+    <h2>Import an export</h2>
+    <form method="post" action="{{.Path}}/import" enctype="multipart/form-data" class="row">
+      <input type="file" name="file" accept=".csv,.tsv,.txt{{if .IsGames}},.json{{end}}" required>
+      {{if not .IsGames}}<select name="type" aria-label="Import as"><option value="">Detect type</option><option value="book">All books</option><option value="audiobook">All audiobooks</option></select>{{end}}
+      <button>Import</button>
+    </form>
+    <p class="muted small">{{if .IsGames}}Playnite JSON or CSV, or any list with a Name column. Playnite is the route for GOG, PlayStation, Xbox and Epic.{{else}}Goodreads or StoryGraph CSV, or any list with a Title column. For an Audible library list, choose All audiobooks.{{end}} Re-importing is safe. Files dropped in <code>{{.Dir}}</code> are imported automatically.</p>
+  </section>
+  <section class="panel">
+    {{with .Stats}}
+    {{if .TopPlayed}}<h2>Most played</h2><ol class="rank">{{range .TopPlayed}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}} h</span></li>{{end}}</ol>{{end}}
+    {{if .Creators}}<h2>{{if $games}}Top developers{{else}}Top authors{{end}}</h2><ol class="rank">{{range .Creators}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{end}}</ol>{{end}}
+    {{if and $games .Platforms}}<h2>Platforms</h2><ol class="rank">{{range .Platforms}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{end}}</ol>{{end}}
+    <h2>Finished by year</h2>
+    <ol class="rank">{{range .ByYear}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
+    {{end}}
+  </section>
+</div>
+
+{{template "jobs" .Jobs}}
+
+{{if .Recent}}
+<section class="panel">
+  <h2>Recent activity</h2>
+  {{template "shelfevents" .Recent}}
+</section>
+{{end}}
+
+<form method="get" class="filters">
+  {{if .Type}}{{if not .IsGames}}<input type="hidden" name="type" value="{{.Type}}">{{end}}{{end}}
+  <input type="search" name="q" value="{{.Q.Search}}" placeholder="{{if .IsGames}}Title, platform, developer{{else}}Title, author, series, ISBN{{end}}">
+  {{$st := .Q.Status}}
+  <select name="status" aria-label="Status"><option value="">Any status</option>{{range .Statuses}}<option value="{{.}}" {{if eq . $st}}selected{{end}}>{{.}}</option>{{end}}</select>
+  <button>Filter</button>
+</form>
+<section class="panel">
+  <table>
+    <thead><tr><th>Title</th><th>{{if .IsGames}}Platform{{else}}Author{{end}}</th><th>Status</th><th>{{if .IsGames}}Played{{else}}Progress{{end}}</th><th>{{if .IsGames}}Completions{{else}}Reads{{end}}</th><th>Last activity</th><th>Source</th></tr></thead>
+    <tbody>
+    {{range .Items}}
+      <tr>
+        <td>{{if not $games}}<span class="tag {{.MediaType}}">{{.MediaType}}</span> {{end}}<b>{{.Title}}</b>{{if .Year}} <span class="muted small">{{.Year}}</span>{{end}}</td>
+        <td>{{if $games}}{{.Platform}}{{else}}{{.Creator}}{{end}}</td>
+        <td class="small">{{.Status}}{{if .Rating}} <span>★{{.Rating}}</span>{{end}}</td>
+        <td class="mono small">{{if $games}}{{hm .PlaytimeS}}{{else}}{{percent .Progress}}{{end}}</td>
+        <td class="mono small">{{if .Finishes}}{{.Finishes}}{{end}}</td>
+        <td class="mono small">{{ts .LastActivity}}</td>
+        <td class="muted small">{{.Source}}</td>
+      </tr>
+    {{else}}<tr><td colspan="7" class="muted">Nothing here yet. Connect a source on the Settings page, or import an export above.</td></tr>{{end}}
+    </tbody>
+  </table>
+  {{if .HasMore}}<p class="pager"><a class="btn" href="{{.NextURL}}">More →</a></p>{{end}}
+</section>
+{{end}}

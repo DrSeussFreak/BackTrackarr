@@ -35,7 +35,7 @@ func (s *Store) UpsertComic(ctx context.Context, c *Comic) (bool, error) {
 	raw, _ := json.Marshal(c.Raw)
 	var id int64
 	var oldRaw string
-	err := s.DB.QueryRowContext(ctx, `SELECT id, raw FROM comics WHERE ext_key=?`, c.ExtKey).Scan(&id, &oldRaw)
+	err := s.q(ctx).QueryRowContext(ctx, `SELECT id, raw FROM comics WHERE ext_key=?`, c.ExtKey).Scan(&id, &oldRaw)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
@@ -50,7 +50,7 @@ func (s *Store) UpsertComic(ctx context.Context, c *Comic) (bool, error) {
 		raw, _ = json.Marshal(merged)
 	}
 	isNew := id == 0
-	err = s.DB.QueryRowContext(ctx, `INSERT INTO comics(ext_key,series,issue,variant,title,publisher,release_date,cover_date,
+	err = s.q(ctx).QueryRowContext(ctx, `INSERT INTO comics(ext_key,series,issue,variant,title,publisher,release_date,cover_date,
 		barcode,format,is_read,rating,raw,imported_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(ext_key) DO UPDATE SET series=COALESCE(excluded.series, comics.series),
 		 issue=COALESCE(excluded.issue, comics.issue), variant=COALESCE(excluded.variant, comics.variant),
@@ -68,7 +68,7 @@ func (s *Store) UpsertComic(ctx context.Context, c *Comic) (bool, error) {
 // AddComicRead records one read. Rereads (a new read date on a later import)
 // are kept as separate rows; the same date twice is ignored.
 func (s *Store) AddComicRead(ctx context.Context, comicID int64, at time.Time, source string) (bool, error) {
-	res, err := s.DB.ExecContext(ctx, `INSERT OR IGNORE INTO comic_reads(comic_id,read_at,source) VALUES(?,?,?)`,
+	res, err := s.q(ctx).ExecContext(ctx, `INSERT OR IGNORE INTO comic_reads(comic_id,read_at,source) VALUES(?,?,?)`,
 		comicID, at.Unix(), source)
 	if err != nil {
 		return false, err

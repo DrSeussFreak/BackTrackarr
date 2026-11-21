@@ -17,7 +17,10 @@ import (
 //	3: recs.providers (where to stream a recommendation)
 //	4: sign-in tables (sessions, TOTP, recovery codes, passkeys, API tokens);
 //	   new tables only, created by schema.sql
-const schemaVersion = 4
+//	5: settings saved from the web UI; new table only, created by schema.sql
+//	6: books, audiobooks and games (shelf_items, shelf_events); new tables
+//	   only, created by schema.sql
+const schemaVersion = 6
 
 func hasTable(db *sql.DB, name string) (bool, error) {
 	var n int

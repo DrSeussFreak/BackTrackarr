@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -205,5 +206,58 @@ func TestMigrateFromV1(t *testing.T) {
 	st.DB.QueryRow(`PRAGMA user_version`).Scan(&v)
 	if v != schemaVersion {
 		t.Fatalf("user_version = %d", v)
+	}
+}
+
+func TestBackupIncludesSettingsAndPassesCheck(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	st.CompressBackups = false
+	ctx := context.Background()
+	if err := st.SaveSettings(ctx, map[string]string{"TMDB_API_KEY": "kept"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	name, err := st.Backup(ctx, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkSnapshot(ctx, name); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", "file:"+name+"?mode=ro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var v string
+	if err := db.QueryRow(`SELECT v FROM settings WHERE k='TMDB_API_KEY'`).Scan(&v); err != nil || v != "kept" {
+		t.Fatalf("settings missing from backup: %q %v", v, err)
+	}
+}
+
+func TestInTxRollsBackAsOne(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	boom := errors.New("boom")
+	err = st.InTx(ctx, func(ctx context.Context) error {
+		it := &ShelfItem{MediaType: "book", Source: "t", ExtKey: "1", Title: "A"}
+		if _, err := st.UpsertShelfItem(ctx, it); err != nil {
+			return err
+		}
+		return boom
+	})
+	if !errors.Is(err, boom) {
+		t.Fatal(err)
+	}
+	if id, _ := st.ShelfItemID(ctx, "t", "1"); id != 0 {
+		t.Fatal("a failed batch must leave nothing behind")
 	}
 }

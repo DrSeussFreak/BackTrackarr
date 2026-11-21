@@ -4,7 +4,19 @@
 # To build from source instead of pulling the published image:
 #   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 services:
+  backtrackarr-init:
+    # Runs once before the app: makes the data volume writable by the app's
+    # non-root user (uid 65532), then exits.
+    image: busybox:1.37
+    user: "0:0"
+    command: ["chown", "-R", "65532:65532", "/data"]
+    restart: "no"
+    volumes:
+      - backtrackarr-data:/data
   backtrackarr:
+    depends_on:
+      backtrackarr-init:
+        condition: service_completed_successfully
     image: ghcr.io/drseussfreak/backtrackarr:latest
     container_name: backtrackarr
     restart: unless-stopped

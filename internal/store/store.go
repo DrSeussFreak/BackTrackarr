@@ -50,6 +50,11 @@ type Store struct {
 
 	// CompressBackups gzips daily snapshots (BACKUP_COMPRESS, on by default).
 	CompressBackups bool
+
+	// Same idea for book and game stats.
+	shelfGen   atomic.Int64
+	shelfMu    sync.Mutex
+	shelfCache map[string]cachedShelf
 }
 
 type cachedStats struct {
@@ -62,11 +67,20 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
+	// SQLite reports an unwritable folder as "out of memory (14)".
+	probe, err := os.CreateTemp(dir, ".write-test-*")
+	if err != nil {
+		return nil, fmt.Errorf("data folder %s is not writable by this process (uid %d): %w; "+
+			"in Docker, give the volume to uid 65532 (the bundled stack's backtrackarr-init step does this)", dir, os.Getuid(), err)
+	}
+	probe.Close()
+	os.Remove(probe.Name())
 	path := filepath.Join(dir, "backtrackarr.db")
 	migrateOldName(dir, path)
 	dsn := "file:" + path + "?_txlock=immediate" +
 		"&_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
-		"&_pragma=foreign_keys(ON)&_pragma=cache_size(-8000)&_pragma=temp_store(MEMORY)"
+		"&_pragma=foreign_keys(ON)&_pragma=cache_size(-4000)&_pragma=temp_store(FILE)&_pragma=soft_heap_limit(33554432)" +
+		"&_pragma=journal_size_limit(67108864)&_pragma=wal_autocheckpoint(2000)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -281,7 +295,7 @@ func (s *Store) UpsertMedia(ctx context.Context, m *model.Media) error {
 func (s *Store) RecordPlay(ctx context.Context, mediaID int64, user string, at time.Time, source, player string, private bool) (bool, error) {
 	ts := at.Unix()
 	var x int
-	err := s.DB.QueryRowContext(ctx, `SELECT 1 FROM plays WHERE media_id=? AND user=? AND watched_at BETWEEN ? AND ? LIMIT 1`,
+	err := s.q(ctx).QueryRowContext(ctx, `SELECT 1 FROM plays WHERE media_id=? AND user=? AND watched_at BETWEEN ? AND ? LIMIT 1`,
 		mediaID, user, ts-dedupeWindow, ts+dedupeWindow).Scan(&x)
 	if err == nil {
 		return false, nil
@@ -289,7 +303,7 @@ func (s *Store) RecordPlay(ctx context.Context, mediaID int64, user string, at t
 	if !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
-	res, err := s.DB.ExecContext(ctx, `INSERT OR IGNORE INTO plays(media_id,user,watched_at,source,player,private) VALUES(?,?,?,?,?,?)`,
+	res, err := s.q(ctx).ExecContext(ctx, `INSERT OR IGNORE INTO plays(media_id,user,watched_at,source,player,private) VALUES(?,?,?,?,?,?)`,
 		mediaID, user, ts, source, ns(player), private)
 	if err != nil {
 		return false, err
@@ -782,9 +796,15 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 	name := filepath.Join(dir, "backtrackarr-"+time.Now().Format("20060102-150405")+".db")
 	tmp := name + ".partial"
 	os.Remove(tmp)
+	_, _ = s.DB.ExecContext(ctx, `PRAGMA optimize`) // keeps query plans good as tables grow
 	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, tmp); err != nil {
 		os.Remove(tmp)
 		return "", err
+	}
+	// A damaged snapshot must never rotate a good one out.
+	if err := checkSnapshot(ctx, tmp); err != nil {
+		os.Remove(tmp)
+		return "", fmt.Errorf("backup failed its integrity check: %w", err)
 	}
 	if s.CompressBackups {
 		if err := gzipFile(tmp, name+".gz"); err != nil {
@@ -807,6 +827,23 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 		}
 	}
 	return name, nil
+}
+
+// checkSnapshot runs SQLite's integrity check on a finished backup.
+func checkSnapshot(ctx context.Context, path string) error {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	var res string
+	if err := db.QueryRowContext(ctx, `PRAGMA quick_check(1)`).Scan(&res); err != nil {
+		return err
+	}
+	if res != "ok" {
+		return errors.New(res)
+	}
+	return nil
 }
 
 // oldDBNames are the database file names used by earlier names of the app.

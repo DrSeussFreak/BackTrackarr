@@ -27,7 +27,9 @@ code.big { font-size: 1.3em; letter-spacing: .1em; }
 
 header.top { display: flex; align-items: center; gap: 24px; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 1; }
 .brand { font-weight: 700; font-size: 18px; color: var(--ink); letter-spacing: -.01em; }
-.brand::before { content: "●"; color: var(--accent); margin-right: 6px; }
+.brand { display: inline-flex; align-items: center; gap: 8px; }
+.brand img { display: block; }
+.auth-logo { display: block; width: 112px; height: 112px; margin: 0 auto 14px; }
 nav { display: flex; gap: 4px; }
 nav a { color: var(--muted); padding: 6px 12px; border-radius: 6px; }
 nav a.on, nav a:hover { color: var(--ink); background: var(--bg); text-decoration: none; }

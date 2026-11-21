@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BackTrackarr">
+  <rect width="64" height="64" rx="14" fill="#17171a"/>
+  <g transform="translate(31 32) scale(.88)">
+    <path d="M17.5-19.5A26 26 0 1 0 25.8-3" fill="none" stroke="#fb923c" stroke-width="4" stroke-linecap="round"/>
+    <path d="M26-12 33-1H19z" fill="#fb923c" stroke="#fb923c" stroke-width="1" stroke-linejoin="round"/>
+    <circle r="19" fill="#f97316"/>
+    <g fill="#17171a" stroke="#17171a" stroke-width="2" stroke-linejoin="round">
+      <path d="M0-8-11 0 0 8z"/>
+      <path d="M11-8 0 0 11 8z"/>
+    </g>
+  </g>
+</svg>

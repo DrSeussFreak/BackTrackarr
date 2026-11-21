@@ -22,6 +22,7 @@ import (
 	"github.com/DrSeussFreak/BackTrackarr/internal/model"
 	"github.com/DrSeussFreak/BackTrackarr/internal/sinks"
 	"github.com/DrSeussFreak/BackTrackarr/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/throttle"
 )
 
 //go:embed templates/*.html static/*
@@ -47,6 +48,11 @@ type Server struct {
 	auth map[string]*authState
 
 	signin *authState2 // sign-in: limiter, passkey ceremonies
+
+	// Restart reloads the app with newly saved settings. Set by main.
+	Restart func()
+	// Throttle paces outbound requests. Set by main, nil in tests.
+	Throttle *throttle.Transport
 }
 
 var funcs = template.FuncMap{
@@ -64,6 +70,21 @@ var funcs = template.FuncMap{
 		return fmt.Sprintf("%d h", h)
 	},
 	"num": num,
+	"hm": func(sec int64) string {
+		if sec <= 0 {
+			return ""
+		}
+		if sec < 3600 {
+			return fmt.Sprintf("%d m", max(sec/60, 1))
+		}
+		return fmt.Sprintf("%s h %d m", num(sec/3600), sec%3600/60)
+	},
+	"percent": func(f float64) string {
+		if f <= 0 {
+			return ""
+		}
+		return fmt.Sprintf("%.0f%%", f*100)
+	},
 	"pct": func(a, b int64) int64 {
 		if b == 0 {
 			return 0
@@ -99,7 +120,7 @@ func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger
 		fm[k] = v
 	}
 	fm["mine"] = eng.IsMyService
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "login", "mfa", "security"} {
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "shelf", "login", "mfa", "security"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
@@ -136,6 +157,8 @@ func (s *Server) Handler() http.Handler {
 	root.Handle("GET /static/", http.FileServerFS(assets))
 	s.routesAuth(root)
 	s.routesSecurity(admin)
+	s.routesSettings(admin)
+	s.routesShelf(admin)
 	root.Handle("/", s.guard(admin))
 	return root
 }
@@ -212,7 +235,18 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	users, _ := s.st.Users(r.Context())
-	s.render(w, "dashboard", M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "Recent": recent, "Users": users, "User": user})
+	data := M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "Recent": recent, "Users": users, "User": user}
+	// Books and games cover one account each, so they aren't split by Plex user.
+	if user == "" {
+		if b, err := s.st.ShelfStats(r.Context(), ""); err == nil && b.Titles > 0 {
+			data["Books"] = b
+		}
+		if g, err := s.st.ShelfStats(r.Context(), "game"); err == nil && g.Titles > 0 {
+			data["Games"] = g
+		}
+		data["ShelfRecent"], _ = s.st.RecentShelfEvents(r.Context(), "all", 10)
+	}
+	s.render(w, "dashboard", data)
 }
 
 func parseCursor(v string) (int64, int64) {

@@ -10,7 +10,7 @@ User=backtrackarr
 Group=backtrackarr
 EnvironmentFile=/etc/backtrackarr/backtrackarr.env
 Environment=DATA_DIR=/var/lib/backtrackarr
-Environment=GOMEMLIMIT=96MiB
+Environment=GOMEMLIMIT=72MiB
 Environment=GOGC=50
 WorkingDirectory=/var/lib/backtrackarr
 ExecStart=/usr/local/bin/backtrackarr

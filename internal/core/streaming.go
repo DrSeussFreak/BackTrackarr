@@ -448,31 +448,46 @@ func (e *Engine) ImportStreaming(ctx context.Context, r io.Reader, opt StreamImp
 	source := serviceSlug(res.Service) + "-import"
 	private := e.IsPrivateSection(res.Service, "")
 	cache := map[string]model.Media{}
-	for i, r := range parsed {
-		key := fmt.Sprintf("%s|%s|%d|%d|%s|%d", r.item.Show, r.item.Title, r.item.Season, r.item.Episode, r.item.EpisodeTitle, r.item.Year)
-		m, ok := cache[key]
-		if !ok {
-			var err error
-			if m, err = e.ResolveStream(ctx, r.item); err != nil {
-				res.Skipped++
-				continue
+	for start := 0; start < len(parsed); start += 500 {
+		chunk := parsed[start:min(start+500, len(parsed))]
+		ids := make([]int64, len(chunk))
+		for i, r := range chunk {
+			key := fmt.Sprintf("%s|%s|%d|%d|%s|%d", r.item.Show, r.item.Title, r.item.Season, r.item.Episode, r.item.EpisodeTitle, r.item.Year)
+			m, ok := cache[key]
+			if !ok {
+				var err error
+				if m, err = e.ResolveStream(ctx, r.item); err != nil {
+					res.Skipped++
+					continue
+				}
+				cache[key] = m
 			}
-			cache[key] = m
+			if (m.Kind == model.Movie && m.IDs.Empty()) || (m.Kind == model.Episode && m.ShowIDs.Empty()) {
+				res.Unmatched++
+			}
+			ids[i] = m.ID
 		}
-		if (m.Kind == model.Movie && m.IDs.Empty()) || (m.Kind == model.Episode && m.ShowIDs.Empty()) {
-			res.Unmatched++
-		}
-		ins, err := e.st.RecordPlay(ctx, m.ID, r.user, r.at, source, res.Service, private)
-		if err != nil {
+		if err := e.st.InTx(ctx, func(ctx context.Context) error {
+			for i, r := range chunk {
+				if ids[i] == 0 {
+					continue
+				}
+				ins, err := e.st.RecordPlay(ctx, ids[i], r.user, r.at, source, res.Service, private)
+				if err != nil {
+					return err
+				}
+				if ins {
+					res.Added++
+				} else {
+					res.Duplicates++
+				}
+			}
+			return nil
+		}); err != nil {
 			return res, err
 		}
-		if ins {
-			res.Added++
-		} else {
-			res.Duplicates++
-		}
-		if report != nil && (i+1)%200 == 0 {
-			report(fmt.Sprintf("%s: %d of %d rows, %d new plays", res.Service, i+1, len(parsed), res.Added))
+		if report != nil {
+			report(fmt.Sprintf("%s: %d of %d rows, %d new plays", res.Service, min(start+500, len(parsed)), len(parsed), res.Added))
 		}
 	}
 	return res, nil

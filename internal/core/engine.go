@@ -15,6 +15,7 @@ import (
 	"github.com/DrSeussFreak/BackTrackarr/internal/plex"
 	"github.com/DrSeussFreak/BackTrackarr/internal/sinks"
 	"github.com/DrSeussFreak/BackTrackarr/internal/store"
+	"github.com/DrSeussFreak/BackTrackarr/internal/throttle"
 )
 
 type Engine struct {
@@ -321,9 +322,13 @@ func (e *Engine) processOne(ctx context.Context, s sinks.Sink) bool {
 		sendErr = s.Send(cctx, ev)
 	}
 
+	until, cooling := throttle.Cooling(sendErr)
 	switch {
 	case sendErr == nil:
 		_ = e.st.FinishOutbox(ctx, row.ID, "ok", "")
+	case cooling:
+		// Nothing was sent, so this doesn't use up a retry.
+		_ = e.st.RetryOutbox(ctx, row.ID, row.Attempts, until.Add(time.Second), sendErr.Error())
 	case sinks.IsPermanent(sendErr) || row.Attempts+1 >= maxAttempts:
 		e.log.Warn("delivery failed", "sink", s.Name(), "action", row.Action, "err", sendErr)
 		_ = e.st.FinishOutbox(ctx, row.ID, "failed", sendErr.Error())

@@ -1,0 +1,34 @@
+# BackTrackarr with every setting stored in the app: no environment variables.
+# Before switching an existing stack to this file, open Settings and click
+# "Move values into the app", or those values are lost when the stack updates.
+# On a brand-new install, open the app right away and set a password on the
+# Settings page: until then, anyone who can reach it can use it.
+services:
+  backtrackarr-init:
+    # Runs once before the app: makes the data volume writable by the app's
+    # non-root user (uid 65532), then exits.
+    image: busybox:1.37
+    user: "0:0"
+    command: ["chown", "-R", "65532:65532", "/data"]
+    restart: "no"
+    volumes:
+      - backtrackarr-data:/data
+  backtrackarr:
+    depends_on:
+      backtrackarr-init:
+        condition: service_completed_successfully
+    image: ghcr.io/drseussfreak/backtrackarr:latest
+    container_name: backtrackarr
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - backtrackarr-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.50"
+
+volumes:
+  backtrackarr-data:
