@@ -149,7 +149,7 @@ func mediaDest(m *model.Media) []any {
 
 func (s *Store) GetMedia(ctx context.Context, id int64) (model.Media, error) {
 	var m model.Media
-	err := s.DB.QueryRowContext(ctx, `SELECT `+mediaCols+` FROM media m WHERE m.id=?`, id).Scan(mediaDest(&m)...)
+	err := s.q(ctx).QueryRowContext(ctx, `SELECT `+mediaCols+` FROM media m WHERE m.id=?`, id).Scan(mediaDest(&m)...)
 	return m, err
 }
 
@@ -213,7 +213,7 @@ func (s *Store) findID(ctx context.Context, m *model.Media) (int64, error) {
 			continue
 		}
 		var id int64
-		err := s.DB.QueryRowContext(ctx, c.q, c.args...).Scan(&id)
+		err := s.q(ctx).QueryRowContext(ctx, c.q, c.args...).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -247,7 +247,7 @@ func (s *Store) UpsertMedia(ctx context.Context, m *model.Media) error {
 	}
 	now := time.Now().Unix()
 	if id == 0 {
-		res, err := s.DB.ExecContext(ctx, `INSERT INTO media
+		res, err := s.q(ctx).ExecContext(ctx, `INSERT INTO media
 			(kind,title,year,show_title,album,season,episode,duration_s,imdb,tmdb,tvdb,trakt,mbid,show_imdb,show_tmdb,show_tvdb,show_trakt,plex_guid,plex_key,updated_at)
 			VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			m.Kind, m.Title, ni(m.Year), ns(m.ShowTitle), ns(m.Album), epNum(m, m.Season), epNum(m, m.Episode), ni(m.DurationS),
@@ -270,10 +270,10 @@ func (s *Store) UpsertMedia(ctx context.Context, m *model.Media) error {
 			imdb=COALESCE(imdb,?), tmdb=COALESCE(tmdb,?), tvdb=COALESCE(tvdb,?), trakt=COALESCE(trakt,?), mbid=COALESCE(mbid,?),
 			show_imdb=COALESCE(show_imdb,?), show_tmdb=COALESCE(show_tmdb,?), show_tvdb=COALESCE(show_tvdb,?), show_trakt=COALESCE(show_trakt,?),
 			plex_guid=COALESCE(plex_guid,?), plex_key=COALESCE(?,plex_key), updated_at=? WHERE id=?`
-		_, err = s.DB.ExecContext(ctx, q, args...)
+		_, err = s.q(ctx).ExecContext(ctx, q, args...)
 		if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 			args[14] = nil // plex guid already belongs to another row; keep this one as is
-			_, err = s.DB.ExecContext(ctx, q, args...)
+			_, err = s.q(ctx).ExecContext(ctx, q, args...)
 		}
 		if err != nil {
 			return err
@@ -568,10 +568,10 @@ func (s *Store) nameCounts(ctx context.Context, q string, args ...any) ([]NameCo
 
 func (s *Store) SetRating(ctx context.Context, mediaID int64, user string, rating float64, at time.Time) error {
 	if rating <= 0 {
-		_, err := s.DB.ExecContext(ctx, `DELETE FROM ratings WHERE media_id=? AND user=?`, mediaID, user)
+		_, err := s.q(ctx).ExecContext(ctx, `DELETE FROM ratings WHERE media_id=? AND user=?`, mediaID, user)
 		return err
 	}
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO ratings(media_id,user,rating,rated_at) VALUES(?,?,?,?)
+	_, err := s.q(ctx).ExecContext(ctx, `INSERT INTO ratings(media_id,user,rating,rated_at) VALUES(?,?,?,?)
 		ON CONFLICT(media_id,user) DO UPDATE SET rating=excluded.rating, rated_at=excluded.rated_at`,
 		mediaID, user, rating, at.Unix())
 	return err

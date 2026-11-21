@@ -130,4 +130,46 @@
     }
   }, 10000);
   window.addEventListener("beforeunload", () => last && send("stop", last.cur));
+
+  // Netflix's Viewing activity page, read from your own signed-in browser.
+  // It only runs when you press the button, and loads pages at a gentle pace.
+  if (/netflix\.com$/.test(location.hostname) && /viewingactivity/i.test(location.pathname)) {
+    const btn = document.createElement("button");
+    btn.textContent = "Send all to BackTrackarr";
+    btn.style.cssText = "position:fixed;right:20px;bottom:20px;z-index:99999;padding:12px 16px;background:#e50914;color:#fff;border:0;border-radius:6px;font-size:15px;cursor:pointer";
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const rows = () => [...document.querySelectorAll("li.retableRow, .retableRow")].map((r) => ({
+      date: (r.querySelector(".date") || {}).textContent || "",
+      title: (r.querySelector(".title a, .title") || {}).textContent || "",
+    })).filter((x) => x.date.trim() && x.title.trim());
+    btn.onclick = async () => {
+      btn.disabled = true;
+      let seen = -1;
+      for (let i = 0; i < 2000; i++) {
+        const count = rows().length;
+        btn.textContent = "Loading… " + count;
+        const more = [...document.querySelectorAll("button")].find((b) => b !== btn && /show more/i.test(b.textContent));
+        if (!more || (count === seen && i > 0)) break;
+        seen = count;
+        more.click();
+        await wait(1800);
+      }
+      const items = rows();
+      if (!items.length) { btn.textContent = "Couldn't read this page"; btn.disabled = false; return; }
+      btn.textContent = "Sending " + items.length + "…";
+      const body = { service: "Netflix", items };
+      if (USER) body.user = USER;
+      GM_xmlhttpRequest({
+        method: "POST", url: SERVER + "/api/scrobble/" + TOKEN + "/history",
+        headers: { "Content-Type": "application/json" }, data: JSON.stringify(body),
+        onload: (r) => {
+          let msg = "Failed: HTTP " + r.status;
+          try { if (r.status === 200) msg = "Done: " + JSON.parse(r.responseText).message; } catch (e) { /* keep msg */ }
+          btn.textContent = msg; btn.disabled = false;
+        },
+        onerror: () => { btn.textContent = "Couldn't reach BackTrackarr"; btn.disabled = false; },
+      });
+    };
+    document.body.append(btn);
+  }
 })();

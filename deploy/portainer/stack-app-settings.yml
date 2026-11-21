@@ -1,6 +1,6 @@
 # BackTrackarr with every setting stored in the app: no environment variables.
-# Before switching an existing stack to this file, open Settings and click
-# "Move values into the app", or those values are lost when the stack updates.
+# Before switching an existing stack to this file, start this version once
+# with your old variables so it can copy them into the app.
 # On a brand-new install, open the app right away and set a password on the
 # Settings page: until then, anyone who can reach it can use it.
 services:

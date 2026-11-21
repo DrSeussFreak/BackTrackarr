@@ -319,6 +319,18 @@ CREATE INDEX IF NOT EXISTS shelf_events_at   ON shelf_events(at);
 CREATE INDEX IF NOT EXISTS shelf_events_kind ON shelf_events(kind, at);
 CREATE INDEX IF NOT EXISTS shelf_events_item ON shelf_events(item_id, kind);
 
+-- Records from imports with no place in plays or ratings (watchlists, lists,
+-- comments, whole-show ratings). raw is zlib-compressed.
+CREATE TABLE IF NOT EXISTS import_extras (
+  hash        TEXT PRIMARY KEY,
+  source      TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  title       TEXT,
+  raw         BLOB NOT NULL,
+  imported_at INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS import_extras_kind ON import_extras(source, kind);
+
 -- ---------- settings saved from the web UI ----------
 -- Override environment variables. An empty value means "use the default".
 CREATE TABLE IF NOT EXISTS settings (

@@ -4,6 +4,8 @@
   {{template "userpicker" .}}
 </div>
 
+{{if .NeedsSetup}}<p class="flash"><b>Finish setting up.</b> <a class="btn" href="/setup">Start setup →</a></p>{{end}}
+
 {{with .Stats}}
 <section class="cards">
   <div class="card"><div class="k">Total plays</div><div class="v">{{num .Plays}}</div></div>

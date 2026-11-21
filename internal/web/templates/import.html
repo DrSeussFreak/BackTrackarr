@@ -1,0 +1,57 @@
+{{define "content"}}
+<div class="head"><h1>Import</h1></div>
+<p class="muted">Drop in any export. BackTrackarr works out what it is. Importing twice is safe.</p>
+
+<section class="panel step">
+  <h2>Import a file</h2>
+  <form method="post" action="/import" enctype="multipart/form-data" class="row">
+    <input type="file" name="file" accept=".zip,.json,.csv,.tsv,.txt,.xml" required aria-label="Export file">
+    <input name="user" value="{{.DefaultUser}}" list="import-users" placeholder="Whose history" aria-label="Whose history">
+    <datalist id="import-users">{{range .Users}}<option value="{{.Name}}">{{end}}</datalist>
+    <button>Import</button>
+  </form>
+  <table>
+    <thead><tr><th>From</th><th>Brings in</th><th>Get your file</th></tr></thead>
+    <tbody>
+      <tr><td><b>Trakt</b></td><td>History, ratings, watchlist, lists, comments</td><td><a href="https://trakt.tv/settings/data" target="_blank" rel="noopener noreferrer">Data export ↗</a></td></tr>
+      <tr><td><b>Simkl</b></td><td>Movies, shows, anime, ratings, watchlist</td><td><a href="https://simkl.com/apps/backup/" target="_blank" rel="noopener noreferrer">Backup ↗</a></td></tr>
+      <tr><td><b>Letterboxd</b></td><td>Diary, rewatches, ratings, watchlist</td><td><a href="https://letterboxd.com/settings/data/" target="_blank" rel="noopener noreferrer">Export ↗</a></td></tr>
+      <tr><td><b>IMDb</b></td><td>Ratings, watchlist</td><td><a href="https://www.imdb.com/list/ratings" target="_blank" rel="noopener noreferrer">Ratings ↗</a></td></tr>
+      <tr><td><b>Netflix</b></td><td>Viewing history</td><td><a href="https://www.netflix.com/viewingactivity" target="_blank" rel="noopener noreferrer">Viewing activity ↗</a></td></tr>
+      <tr><td><b>Amazon</b></td><td>Prime Video history</td><td><a href="https://www.amazon.com/hz/privacy-central/data-requests/preview.html" target="_blank" rel="noopener noreferrer">Request data ↗</a></td></tr>
+      <tr><td><b>CLZ Comics</b></td><td>Comics, read dates, ratings</td><td class="muted">XML or CSV export from CLZ</td></tr>
+      <tr><td><b>Anything else</b></td><td>Any list with a title, plus a date or rating</td><td class="muted">CSV, JSON or ZIP</td></tr>
+    </tbody>
+  </table>
+</section>
+
+{{template "jobs" .Jobs}}
+
+<section class="panel step">
+  <h2>Netflix from your signed-in browser</h2>
+  <ol class="small">
+    <li><a href="/streaming/backtrackarr.user.js">Install the BackTrackarr scrobbler</a> (needs the <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> extension).</li>
+    <li>Open <a href="https://www.netflix.com/viewingactivity" target="_blank" rel="noopener noreferrer">Viewing activity</a> and pick your profile.</li>
+    <li>Click <b>Send all to BackTrackarr</b> at the bottom right.</li>
+  </ol>
+  <p class="muted small">Your password stays with Netflix. Live plays are recorded automatically once the scrobbler is installed.</p>
+</section>
+
+<section class="panel step">
+  <h2>Live webhooks</h2>
+  <table>
+    <tr><td><b>Plex</b><div class="muted small">Settings, Webhooks (Plex Pass)</div></td><td><code class="copy">{{.PlexURL}}</code></td></tr>
+    <tr><td><b>Jellyfin</b><div class="muted small">Webhook plugin</div></td><td><code class="copy">{{.JellyfinURL}}</code></td></tr>
+    <tr><td><b>Emby</b><div class="muted small">Settings, Webhooks</div></td><td><code class="copy">{{.EmbyURL}}</code></td></tr>
+    <tr><td><b>Anything else</b><div class="muted small">POST JSON: action, title or show, season, episode</div></td><td><code class="copy">{{.ScrobbleURL}}</code></td></tr>
+  </table>
+  <p class="muted small">These addresses contain your private token, so treat them like a password.</p>
+</section>
+
+{{if .Extras}}
+<section class="panel">
+  <h2>Also kept from your imports</h2>
+  <ol class="rank">{{range .Extras}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{end}}</ol>
+</section>
+{{end}}
+{{end}}

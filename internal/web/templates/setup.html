@@ -1,0 +1,107 @@
+{{define "content"}}
+<div class="head"><h1>Setup</h1></div>
+<p class="muted">Click through these in order. Anything you skip can be added later.</p>
+
+<section class="panel step" id="plex">
+  <h2><span class="num {{if .PlexConnected}}done{{end}}">{{if .PlexConnected}}✓{{else}}1{{end}}</span> Connect Plex</h2>
+  {{if .PlexConnected}}
+    <p><span class="ok">Connected</span> <span class="muted mono small">{{.PlexURL}}</span></p>
+    {{with .PlexErr}}<p class="bad">{{.}}</p>{{end}}
+    <button class="ghost" id="plex-signin">Sign in again</button>
+  {{else}}
+    <p>Sign in on Plex's page. Your token, server, users and libraries fill in automatically.</p>
+    <button id="plex-signin">Sign in with Plex</button>
+  {{end}}
+  <p id="plex-status" class="small" role="status"></p>
+  <div id="plex-servers"></div>
+</section>
+
+<section class="panel step">
+  <h2><span class="num">2</span> Choose people and private libraries</h2>
+  {{if not .People}}<p class="muted small">{{if .PlexConnected}}Your users and libraries will appear here when Plex can be reached.{{else}}Your users and libraries will appear here after you connect Plex.{{end}}</p>{{else}}
+  <form method="post" action="/setup/plex/people">
+    <input type="hidden" name="next" value="/setup">
+    <div class="grid2">
+      <fieldset>
+        <legend>Send whose plays to Trakt and other services?</legend>
+        {{range .People}}<label class="check"><input type="checkbox" name="users" value="{{.Name}}" {{if .Checked}}checked{{end}}> {{.Name}}{{if .Owner}} <span class="muted small">owner</span>{{end}}</label>{{end}}
+        <p class="muted small">Everyone's plays are still saved here.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Keep which libraries private?</legend>
+        {{range .Libraries}}<label class="check"><input type="checkbox" name="private" value="{{.Title}}" {{if .Private}}checked{{end}}> {{.Title}} <span class="muted small">{{.Type}}</span></label>{{end}}
+        <p class="muted small">Private plays are saved here and never sent anywhere.</p>
+      </fieldset>
+    </div>
+    <button>Save</button>
+  </form>
+  {{end}}
+</section>
+
+<section class="panel step">
+  <h2><span class="num">3</span> Check this site's details</h2>
+  <p class="muted small">Already filled in from your browser. Change anything that's wrong.</p>
+  <form method="post" action="/settings" class="fields">
+    <input type="hidden" name="next" value="/setup">
+    <label>Address of this site <input name="BASE_URL" value="{{.BaseURL}}" required></label>
+    <label>Time zone <input name="TZ" id="tz" value="{{.TZ}}" placeholder="America/Chicago"></label>
+    <label>Country for streaming <input name="STREAMING_REGION" id="region" value="{{.Region}}" maxlength="2"></label>
+    <input type="hidden" name="TRUST_PROXY" value="{{if .BehindProxy}}true{{else}}false{{end}}">
+    <button>Save</button>
+  </form>
+</section>
+
+<section class="panel step">
+  <h2><span class="num">4</span> Connect your other apps</h2>
+  {{if .Apps}}<ul class="connected">{{range .Apps}}<li><span class="ok">✓</span> {{.Label}} <span class="muted mono small">{{.URL}}</span></li>{{end}}</ul>{{end}}
+  <p>Finds Sonarr, Radarr, Jellyseerr, Jellyfin, Audiobookshelf and more on your network. Apps don't hand out their keys, so you paste one for each.</p>
+  <button id="find-apps">Find my apps</button>
+  <p id="find-status" class="small" role="status"></p>
+  <div id="found-apps"></div>
+  <h3>Add one by hand</h3>
+  <p class="muted small">Use this for a second Sonarr or Radarr, or anything not found above.</p>
+  <div class="row">
+    <select id="add-kind" aria-label="App">{{range .AppKinds}}<option value="{{.Kind}}" data-path="{{.KeyPath}}" data-help="{{.KeyHelp}}">{{.Label}}</option>{{end}}</select>
+    <input id="add-url" placeholder="http://localhost:7879" aria-label="App address">
+    <button class="ghost" id="add-app" type="button">Add</button>
+  </div>
+  <div id="manual-apps"></div>
+</section>
+
+<section class="panel step">
+  <h2><span class="num">5</span> Your streaming services</h2>
+  <form method="post" action="/setup/streaming">
+    <input type="hidden" name="next" value="/setup">
+    <fieldset class="services">
+      <legend>Which do you subscribe to?</legend>
+      {{range .Services}}<label class="check"><input type="checkbox" name="services" value="{{.Name}}" {{if .Checked}}checked{{end}}> {{.Name}}</label>{{end}}
+    </fieldset>
+    <button>Save</button>
+  </form>
+  <h3>Track what you watch automatically</h3>
+  <p class="small">Install the <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer">Tampermonkey</a> browser extension, then add the scrobbler. It records plays on Netflix, Hulu, Prime Video and 20+ others in the browser you're already signed in to. BackTrackarr never sees those passwords.</p>
+  <a class="btn" href="/streaming/backtrackarr.user.js">Install scrobbler</a>
+  <h3>Bring in your past history</h3>
+  <p class="small"><a href="https://www.netflix.com/viewingactivity" target="_blank" rel="noopener noreferrer">Download Netflix history ↗</a> · <a href="https://www.amazon.com/hz/privacy-central/data-requests/preview.html" target="_blank" rel="noopener noreferrer">Request Amazon data ↗</a> · then upload the file on <a href="/streaming">Streaming</a>.</p>
+</section>
+
+<section class="panel step">
+  <h2><span class="num">6</span> Optional extras</h2>
+  <p class="muted small">Only add what you use. Each link opens the page with your key.</p>
+  <form method="post" action="/settings" autocomplete="off">
+    <input type="hidden" name="next" value="/setup">
+    <table>
+      {{range .Keys}}
+      <tr>
+        <td><b>{{.Label}}</b><div class="muted small">{{.Why}}</div></td>
+        <td><a href="{{.Link}}" target="_blank" rel="noopener noreferrer">Get key ↗</a></td>
+        <td><input type="password" name="{{.Key}}" aria-label="{{.Label}} key" autocomplete="new-password" placeholder="{{if .IsSet}}✓ saved{{else}}Paste here{{end}}"></td>
+      </tr>
+      {{end}}
+    </table>
+    <button>Save</button>
+  </form>
+  <p class="muted small">Everything else is on the <a href="/settings">Settings</a> page. Protect your sign-in on <a href="/security">Security</a>.</p>
+</section>
+<script src="/static/setup.js" defer></script>
+{{end}}

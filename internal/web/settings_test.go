@@ -178,3 +178,39 @@ func TestSettingsAdoptPasswordAndBackup(t *testing.T) {
 		t.Fatalf("restore lost values: %d keys", len(m))
 	}
 }
+
+func TestSettingsSaveIsImmediateAndIgnoresStaleTabs(t *testing.T) {
+	config.SetOverrides(nil)
+	t.Cleanup(func() { config.SetOverrides(nil) })
+	st, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	cfg := &config.Config{}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := New(cfg, st, core.New(context.Background(), cfg, st, nil, nil, log), log).Handler()
+	post := func(f url.Values) {
+		r := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(f.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		h.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	post(url.Values{"BACKUP_KEEP": {"5"}, "was_BACKUP_KEEP": {""}})
+	keep, _ := config.Lookup("BACKUP_KEEP")
+	if v, src := config.Current(keep); v != "5" || src != "saved" {
+		t.Fatalf("a save must show right away: %q %q", v, src)
+	}
+	// An older tab still holds the old blank value and changes something else.
+	post(url.Values{"BACKUP_KEEP": {""}, "was_BACKUP_KEEP": {""}, "SESSION_DAYS": {"9"}, "was_SESSION_DAYS": {""}})
+	m, _ := st.Settings(context.Background())
+	if m["BACKUP_KEEP"] != "5" || m["SESSION_DAYS"] != "9" {
+		t.Fatalf("stale tab changed a newer value: %v", m)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	for _, want := range []string{"Needed for:", "Essential", "novalidate", `name="was_BACKUP_KEEP" value="5"`} {
+		if !strings.Contains(w.Body.String(), want) {
+			t.Errorf("settings page is missing %q", want)
+		}
+	}
+}

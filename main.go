@@ -18,6 +18,7 @@ import (
 	"time"
 	_ "time/tzdata" // correct local times in minimal containers
 
+	"github.com/DrSeussFreak/BackTrackarr/internal/auth"
 	"github.com/DrSeussFreak/BackTrackarr/internal/config"
 	"github.com/DrSeussFreak/BackTrackarr/internal/core"
 	"github.com/DrSeussFreak/BackTrackarr/internal/model"
@@ -65,6 +66,13 @@ func run() (bool, error) {
 		st.Close()
 		return false, err
 	}
+	moved := 0
+	if !config.IgnoreSaved() {
+		if moved, err = moveEnvToApp(st, cfg, saved); err != nil {
+			st.Close()
+			return false, err
+		}
+	}
 	passwordHash := saved[config.AdminPasswordKey]
 	if config.IgnoreSaved() {
 		saved = nil
@@ -85,6 +93,9 @@ func run() (bool, error) {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	if config.IgnoreSaved() {
 		log.Warn("SETTINGS_IGNORE: using environment variables only; saved settings are kept but not applied")
+	}
+	if moved > 0 {
+		log.Info("moved settings from the environment into the app; they can be removed from the stack", "values", moved)
 	}
 	st.CompressBackups = cfg.BackupCompress
 	if cfg.AuthReset {
@@ -184,6 +195,34 @@ func run() (bool, error) {
 	return restart.Load() && sigCtx.Err() == nil, nil
 }
 
+// moveEnvToApp saves environment settings the app doesn't hold yet, with the
+// password hashed, and adds them to saved. After one start, the stack needs
+// no variables.
+func moveEnvToApp(st *store.Store, cfg *config.Config, saved map[string]string) (int, error) {
+	set := config.FromEnv(saved)
+	p := cfg.AdminPassword
+	if p != "" && saved[config.AdminPasswordKey] == "" && !(strings.HasPrefix(p, "<") && strings.HasSuffix(p, ">")) {
+		if !auth.IsPasswordHash(p) {
+			h, err := auth.HashPassword(p)
+			if err != nil {
+				return 0, err
+			}
+			p = h
+		}
+		set[config.AdminPasswordKey] = p
+	}
+	if len(set) == 0 {
+		return 0, nil
+	}
+	if err := st.SaveSettings(context.Background(), set, nil); err != nil {
+		return 0, err
+	}
+	for k, v := range set {
+		saved[k] = v
+	}
+	return len(set), nil
+}
+
 // useDataTemp puts temp files (large uploads, big sorts, backups) on the data
 // volume. The container image has no /tmp, and keeping them out of memory is
 // what lets large imports fit the container's memory limit.
@@ -206,7 +245,7 @@ func useDataTemp(dataDir string) {
 func setupThrottle(cfg *config.Config, st *store.Store) *throttle.Transport {
 	t := throttle.Install()
 	c := cfg.Shelf
-	own := []string{cfg.PlexURL, cfg.FloppyURL, c.AudiobookshelfURL, c.KomgaURL, c.KavitaURL, c.RommURL}
+	own := []string{cfg.PlexURL, cfg.FloppyURL, cfg.SeerrURL, c.AudiobookshelfURL, c.KomgaURL, c.KavitaURL, c.RommURL}
 	for _, a := range cfg.Arr {
 		own = append(own, a.URL)
 	}

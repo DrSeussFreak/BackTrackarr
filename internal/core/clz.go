@@ -102,11 +102,11 @@ func (e *Engine) ImportCLZ(ctx context.Context, r io.Reader, source string) (*Cl
 	br := bufio.NewReader(r)
 	head, _ := br.Peek(4096)
 	head = bytes.TrimPrefix(head, []byte("\xef\xbb\xbf"))
-	if bytes.HasPrefix(head, []byte("<")) {
-		return nil, fmt.Errorf("this looks like an XML export; export to CSV/text from CLZ instead")
-	}
 	if b, _ := br.Peek(3); bytes.Equal(b, []byte("\xef\xbb\xbf")) {
 		br.Discard(3)
+	}
+	if bytes.HasPrefix(bytes.TrimSpace(head), []byte("<")) {
+		return e.importCLZXML(ctx, br, source)
 	}
 	cr := csv.NewReader(br)
 	cr.Comma = detectComma(head)
@@ -162,37 +162,8 @@ func (e *Engine) ImportCLZ(ctx context.Context, r io.Reader, source string) (*Cl
 				if len(raw) == 0 {
 					continue
 				}
-				res.Rows++
-				c := &store.Comic{Series: get("series"), Issue: get("issue"), Variant: get("variant"), Title: get("title"),
-					Publisher: get("publisher"), ReleaseDate: get("release"), CoverDate: get("cover"), Barcode: get("barcode"),
-					Format: get("format"), Raw: raw}
-				c.ExtKey = get("key")
-				if c.ExtKey == "" {
-					h := sha1.Sum([]byte(strings.ToLower(strings.Join([]string{c.Series, c.Issue, c.Variant, c.Barcode, c.Title}, "|"))))
-					c.ExtKey = "h:" + hex.EncodeToString(h[:10])
-				} else {
-					c.ExtKey = "clz:" + c.ExtKey
-				}
-				readAt, hasDate := parseDate(get("readdate"))
-				c.Read = truthy(get("read")) || hasDate
-				if v, err := strconv.ParseFloat(strings.TrimSpace(strings.Split(get("rating"), "/")[0]), 64); err == nil {
-					c.Rating = v
-				}
-				isNew, err := e.st.UpsertComic(ctx, c)
-				if err != nil {
+				if err := e.clzStore(ctx, get, raw, source, res); err != nil {
 					return err
-				}
-				if isNew {
-					res.New++
-				} else {
-					res.Updated++
-				}
-				if hasDate {
-					if ok, err := e.st.AddComicRead(ctx, c.ID, readAt, source); err != nil {
-						return err
-					} else if ok {
-						res.Reads++
-					}
 				}
 			}
 			return nil
@@ -201,6 +172,43 @@ func (e *Engine) ImportCLZ(ctx context.Context, r io.Reader, source string) (*Cl
 		}
 	}
 	return res, nil
+}
+
+// clzStore saves one comic from either a CSV row or an XML record.
+func (e *Engine) clzStore(ctx context.Context, get func(string) string, raw map[string]string, source string, res *ClzResult) error {
+	res.Rows++
+	c := &store.Comic{Series: get("series"), Issue: get("issue"), Variant: get("variant"), Title: get("title"),
+		Publisher: get("publisher"), ReleaseDate: get("release"), CoverDate: get("cover"), Barcode: get("barcode"),
+		Format: get("format"), Raw: raw}
+	c.ExtKey = get("key")
+	if c.ExtKey == "" {
+		h := sha1.Sum([]byte(strings.ToLower(strings.Join([]string{c.Series, c.Issue, c.Variant, c.Barcode, c.Title}, "|"))))
+		c.ExtKey = "h:" + hex.EncodeToString(h[:10])
+	} else {
+		c.ExtKey = "clz:" + c.ExtKey
+	}
+	readAt, hasDate := clzDate(get("readdate"))
+	c.Read = truthy(get("read")) || hasDate
+	if v, err := strconv.ParseFloat(strings.TrimSpace(strings.Split(get("rating"), "/")[0]), 64); err == nil {
+		c.Rating = v
+	}
+	isNew, err := e.st.UpsertComic(ctx, c)
+	if err != nil {
+		return err
+	}
+	if isNew {
+		res.New++
+	} else {
+		res.Updated++
+	}
+	if hasDate {
+		if ok, err := e.st.AddComicRead(ctx, c.ID, readAt, source); err != nil {
+			return err
+		} else if ok {
+			res.Reads++
+		}
+	}
+	return nil
 }
 
 // RunCLZWatcher imports any export dropped into CLZ_IMPORT_DIR, then moves
@@ -222,7 +230,7 @@ func (e *Engine) RunCLZWatcher(ctx context.Context) {
 		files, _ := filepath.Glob(filepath.Join(dir, "*"))
 		for _, f := range files {
 			ext := strings.ToLower(filepath.Ext(f))
-			if ext != ".csv" && ext != ".txt" && ext != ".tsv" {
+			if ext != ".csv" && ext != ".txt" && ext != ".tsv" && ext != ".xml" {
 				continue
 			}
 			fh, err := os.Open(f)

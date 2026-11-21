@@ -50,7 +50,10 @@ type Server struct {
 	signin *authState2 // sign-in: limiter, passkey ceremonies
 
 	// Restart reloads the app with newly saved settings. Set by main.
-	Restart func()
+	Restart     func()
+	setup       setupState
+	boot        string // changes each time the app reloads
+	restartOnce sync.Once
 	// Throttle paces outbound requests. Set by main, nil in tests.
 	Throttle *throttle.Transport
 }
@@ -114,13 +117,13 @@ func num(n int64) string {
 }
 
 func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger) *Server {
-	s := &Server{cfg: cfg, st: st, eng: eng, log: log, tmpl: map[string]*template.Template{}, auth: map[string]*authState{}, signin: newAuthState()}
+	s := &Server{cfg: cfg, st: st, eng: eng, log: log, tmpl: map[string]*template.Template{}, auth: map[string]*authState{}, signin: newAuthState(), setup: setupState{pins: map[int64]*plexSignin{}}, boot: strconv.FormatInt(time.Now().UnixNano(), 36)}
 	fm := template.FuncMap{}
 	for k, v := range funcs {
 		fm[k] = v
 	}
 	fm["mine"] = eng.IsMyService
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "shelf", "login", "mfa", "security"} {
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "shelf", "login", "mfa", "security"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
@@ -134,6 +137,8 @@ func (s *Server) Handler() http.Handler {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
+		w.Header().Set("X-Backtrackarr-Boot", s.boot)
+		w.Header().Set("Cache-Control", "no-store")
 		io.WriteString(w, "ok")
 	})
 
@@ -159,6 +164,8 @@ func (s *Server) Handler() http.Handler {
 	s.routesSecurity(admin)
 	s.routesSettings(admin)
 	s.routesShelf(admin)
+	s.routesSetup(admin)
+	s.routesImport(root, admin)
 	root.Handle("/", s.guard(admin))
 	return root
 }
@@ -235,7 +242,8 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	users, _ := s.st.Users(r.Context())
-	data := M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "Recent": recent, "Users": users, "User": user}
+	data := M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "Recent": recent, "Users": users, "User": user,
+		"NeedsSetup": s.cfg.PlexURL == "" || s.cfg.PlexToken == ""}
 	// Books and games cover one account each, so they aren't split by Plex user.
 	if user == "" {
 		if b, err := s.st.ShelfStats(r.Context(), ""); err == nil && b.Titles > 0 {

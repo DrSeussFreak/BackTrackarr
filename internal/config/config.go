@@ -83,6 +83,9 @@ type Config struct {
 
 	Shelf ShelfConfig // books, audiobooks and games
 
+	SeerrURL string // Jellyseerr or Overseerr
+	SeerrKey string
+
 	// Sign-in. AuthReset removes MFA and passkeys at startup (lost authenticator).
 	SessionTTL time.Duration
 	TrustProxy bool
@@ -209,6 +212,8 @@ func Load() *Config {
 		TrackerPullUser:   env("TRACKER_PULL_USER", ""),
 		EnvFile:           envFile,
 		TimeZone:          env("TZ", ""),
+		SeerrURL:          strings.TrimRight(env("SEERR_URL", ""), "/"),
+		SeerrKey:          env("SEERR_API_KEY", ""),
 		SessionTTL:        time.Duration(envInt("SESSION_DAYS", 30)) * 24 * time.Hour,
 		TrustProxy:        envBool("TRUST_PROXY", false),
 		AuthReset:         envBool("AUTH_RESET", false),

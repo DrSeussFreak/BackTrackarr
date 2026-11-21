@@ -46,6 +46,23 @@ TMDB, Plex.tv, AI providers and webhooks.
 - **Settings** lists paused sites, with **Resume now** for after you fix a key.
 - Servers on your own network are not paced.
 
+## Streaming services
+
+Netflix, Hulu, Prime Video and the others have no official history API.
+BackTrackarr doesn't store their passwords or sign in as you, because
+automated logins break their terms and can get an account locked. Use the
+browser scrobbler for live plays and their own history downloads for the past.
+**Setup** links to both.
+
+## Importing history
+
+**Import** in the menu takes a file or ZIP and works out the format. It reads
+Trakt and Simkl exports, Letterboxd, IMDb, Netflix and other streaming history,
+and any list with a title plus a date or rating. Plays and ratings go into your
+history. Watchlists, lists and comments are kept as raw records. Exports whose
+exact fields aren't published are read by field name, so an unusual file may
+need a small fix.
+
 ## How counting works
 
 - Every read, listen or play is its own row, and raw source data is kept.

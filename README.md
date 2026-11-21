@@ -239,7 +239,7 @@ don't take music, so tracks go only to relays and generic webhooks.
 
 ## Comics (CLZ)
 
-Upload a **CLZ Comics** CSV export on the **Comics** page, or drop it into
+Upload or drag in a **CLZ Comics** XML or CSV export on the **Comics** page, or drop it into
 `/data/import/clz`. Every column is kept. Re-importing is safe: a later
 read date is stored as a reread, and fields missing from a smaller export
 are not wiped.

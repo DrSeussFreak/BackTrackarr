@@ -25,6 +25,8 @@
     <a href="/games" {{if eq .Nav "games"}}class="on"{{end}}>Games</a>
     <a href="/recs" {{if eq .Nav "recs"}}class="on"{{end}}>For you</a>
     <a href="/sync" {{if eq .Nav "sync"}}class="on"{{end}}>Sync</a>
+    <a href="/setup" {{if eq .Nav "setup"}}class="on"{{end}}>Setup</a>
+    <a href="/import" {{if eq .Nav "import"}}class="on"{{end}}>Import</a>
     <a href="/settings" {{if eq .Nav "settings"}}class="on"{{end}}>Settings</a>
     <a href="/security" {{if eq .Nav "security"}}class="on"{{end}}>Security</a>
   </nav>
@@ -35,6 +37,7 @@
 {{with .Flash}}<p class="flash">{{.}}</p>{{end}}
 {{template "content" .}}
 </main>
+<script src="/static/dropzone.js" defer></script>
 </body>
 </html>{{end}}
 

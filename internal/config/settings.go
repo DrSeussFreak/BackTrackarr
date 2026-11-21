@@ -136,6 +136,37 @@ func settingIndex() map[string]Setting {
 	return settingsMap
 }
 
+// FromEnv returns environment values not yet saved in the app, ready to save.
+// Startup uses it to move an existing install's settings into the database.
+// A value the app already holds always wins, and placeholders such as
+// "<your Plex token>" or invalid values are left behind.
+func FromEnv(saved map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, s := range Settings() {
+		if _, ok := saved[s.Key]; ok {
+			continue
+		}
+		v := strings.TrimSpace(os.Getenv(s.Key))
+		if v == "" || (strings.HasPrefix(v, "<") && strings.HasSuffix(v, ">")) {
+			continue
+		}
+		if s.Type == "bool" {
+			switch strings.ToLower(v) {
+			case "1", "true", "yes", "on":
+				v = "true"
+			case "0", "false", "no", "off":
+				v = "false"
+			default:
+				continue
+			}
+		}
+		if clean, err := Validate(s, v); err == nil && clean != "" {
+			out[s.Key] = clean
+		}
+	}
+	return out
+}
+
 // Lookup finds a setting by name.
 func Lookup(key string) (Setting, bool) {
 	s, ok := settingIndex()[key]
@@ -207,6 +238,10 @@ func buildSettings() {
 	add(g, "CLZ_IMPORT_DIR", "CLZ import folder", "text", "", "Blank uses import/clz in the data folder.")
 	add(g, "BACKUP_KEEP", "Daily backups to keep", "number", "7", "0 turns backups off.")
 	add(g, "BACKUP_COMPRESS", "Compress backups", "bool", "true", "")
+
+	g = "Requests"
+	add(g, "SEERR_URL", "Jellyseerr or Overseerr address", "url", "", "")
+	add(g, "SEERR_API_KEY", "Jellyseerr or Overseerr API key", "secret", "", "From Settings, General, API Key.")
 
 	g = "Books and audiobooks"
 	add(g, "AUDIOBOOKSHELF_URL", "Audiobookshelf address", "url", "", "")

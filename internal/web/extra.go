@@ -289,10 +289,15 @@ func (s *Server) comicsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) comicsImport(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 256<<20)
+	if err := r.ParseMultipartForm(1 << 20); err != nil { // the rest goes to a temp file
+		s.flash(w, r, "/comics", "Upload failed. Choose a CLZ file under 256 MB.")
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
 	f, hdr, err := r.FormFile("file")
 	if err != nil {
-		s.flash(w, r, "/comics", "Choose a CLZ CSV export to upload.")
+		s.flash(w, r, "/comics", "Choose a CLZ CSV or XML export to upload.")
 		return
 	}
 	defer f.Close()
@@ -331,7 +336,7 @@ func (s *Server) recsPage(w http.ResponseWriter, r *http.Request) {
 		arr = append(arr, arrOpt{a.Name, a.Kind})
 	}
 	s.render(w, "recs", M{"Title": "Recommendations", "Nav": "recs", "Runs": runs, "Users": users, "DefaultUser": s.defaultUser(users),
-		"Providers": s.eng.AIProviders(), "Arr": arr, "Cfg": s.cfg, "Jobs": s.eng.Jobs.List(), "Refresh": s.eng.Jobs.AnyRunning(),
+		"Providers": s.eng.AIProviders(), "Arr": arr, "HasSeerr": s.cfg.SeerrURL != "" && s.cfg.SeerrKey != "", "Cfg": s.cfg, "Jobs": s.eng.Jobs.List(), "Refresh": s.eng.Jobs.AnyRunning(),
 		"Flash": takeFlash(w, r)})
 }
 

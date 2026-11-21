@@ -43,6 +43,7 @@
           <div class="muted small">{{.Reason}}</div></td>
         <td class="nowrap">
           {{if .AddedTo}}<span class="ok small">added to {{.AddedTo}}</span>{{end}}
+          {{if and $.HasSeerr (not .InPlex)}}<form method="post" action="/recs/{{.ID}}/seerr" class="inline"><button class="ghost">Request</button></form>{{end}}
           {{if and $.Arr (not .InPlex)}}
           <form method="post" action="/recs/{{.ID}}/arr" class="inline">
             <select name="instance">{{$k := .Kind}}{{range $.Arr}}{{if or (and (eq $k "movie") (or (eq .Kind "radarr") (eq .Kind "whisparr"))) (and (eq $k "show") (or (eq .Kind "sonarr") (eq .Kind "whisparr")))}}<option>{{.Name}}</option>{{end}}{{end}}</select>

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,10 +29,12 @@ type settingRow struct {
 	Value  string // never holds a secret
 	Source string
 	IsSet  bool
+	Info   config.Info
 }
 
 type settingGroup struct {
 	Name string
+	Help string
 	Rows []settingRow
 }
 
@@ -49,17 +52,18 @@ func visibleSettings() []settingGroup {
 	}
 	var out []settingGroup
 	for _, c := range all {
-		if c.Instance != "" && c.Number > 1 &&
+		alwaysSecond := c.Number == 2 && (c.Instance == "SONARR" || c.Instance == "RADARR")
+		if c.Instance != "" && c.Number > 1 && !alwaysSecond &&
 			!hasURL[c.Instance+"|"+string(rune('0'+c.Number))] && !hasURL[c.Instance+"|"+string(rune('0'+c.Number-1))] {
 			continue
 		}
 		v, src := config.Current(c)
-		row := settingRow{Setting: c, Value: v, Source: src, IsSet: v != ""}
+		row := settingRow{Setting: c, Value: v, Source: src, IsSet: v != "", Info: config.InfoFor(c)}
 		if c.Type == "secret" {
 			row.Value = ""
 		}
 		if len(out) == 0 || out[len(out)-1].Name != c.Group {
-			out = append(out, settingGroup{Name: c.Group})
+			out = append(out, settingGroup{Name: c.Group, Help: config.GroupHelp[c.Group]})
 		}
 		g := &out[len(out)-1]
 		g.Rows = append(g.Rows, row)
@@ -86,10 +90,19 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 		"HasPassword": s.cfg.AdminPassword != "", "Paused": paused, "Ignored": config.IgnoreSaved(), "Flash": takeFlash(w, r)})
 }
 
+// settingsReturn sends a form back to the page it came from. Only these two
+// fixed pages are possible.
+func settingsReturn(r *http.Request) string {
+	if r.FormValue("next") == "/setup" {
+		return "/setup"
+	}
+	return "/settings"
+}
+
 func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := r.ParseForm(); err != nil {
-		s.flash(w, r, "/settings", "Could not read the form.")
+		s.flash(w, r, settingsReturn(r), "Could not read the form.")
 		return
 	}
 	set := map[string]string{}
@@ -109,8 +122,12 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 		}
 		cur, _ := config.Current(c)
 		posted := strings.TrimSpace(vals[0])
+		// Untouched on this page: never overwrite a newer value from another tab.
+		if was, ok := r.PostForm["was_"+c.Key]; ok && posted == strings.TrimSpace(was[0]) {
+			continue
+		}
 		if c.Key == "ADMIN_USER" && posted != cur && s.mfaEnabled(r.Context()) {
-			s.flash(w, r, "/settings", "Nothing was saved. Turn off two-step sign-in and passkeys before changing the username.")
+			s.flash(w, r, settingsReturn(r), "Nothing was saved. Turn off two-step sign-in and passkeys before changing the username.")
 			return
 		}
 		if c.Type == "secret" {
@@ -122,16 +139,16 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 		}
 		v, err := config.Validate(c, posted)
 		if err != nil {
-			s.flash(w, r, "/settings", "Nothing was saved. "+err.Error())
+			s.flash(w, r, settingsReturn(r), "Nothing was saved. "+err.Error())
 			return
 		}
 		set[c.Key] = v
 	}
 	if len(set) == 0 && len(remove) == 0 {
-		s.flash(w, r, "/settings", "No changes to save.")
+		s.flash(w, r, settingsReturn(r), "No changes to save.")
 		return
 	}
-	if err := s.st.SaveSettings(r.Context(), set, remove); err != nil {
+	if err := s.saveSettings(r.Context(), set, remove); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -139,19 +156,60 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *http.Request) {
 	s.applySettings(w, r, "Saved and applied.")
 }
 
+// saveSettings stores changes and shows them right away. Parts of the app
+// that read settings at startup pick them up on the reload that follows.
+func (s *Server) saveSettings(ctx context.Context, set map[string]string, remove []string) error {
+	if err := s.st.SaveSettings(ctx, set, remove); err != nil {
+		return err
+	}
+	if !config.IgnoreSaved() {
+		if all, err := s.st.Settings(ctx); err == nil {
+			config.SetOverrides(all)
+		}
+	}
+	return nil
+}
+
+// requestRestart reloads the app once, after any running job finishes, so a
+// save can never cut off an import. It reports whether it's waiting on one.
+func (s *Server) requestRestart() bool {
+	if s.Restart == nil {
+		return false
+	}
+	waiting := s.eng.Jobs.AnyRunning()
+	s.restartOnce.Do(func() {
+		go func() {
+			time.Sleep(400 * time.Millisecond) // let this response finish
+			for s.eng.Jobs.AnyRunning() {
+				select {
+				case <-s.eng.Context().Done():
+					return
+				case <-time.After(time.Second):
+				}
+			}
+			s.Restart()
+		}()
+	})
+	return waiting
+}
+
 // applySettings answers the browser, then reloads the app with the new values.
 func (s *Server) applySettings(w http.ResponseWriter, r *http.Request, msg string) {
+	to := settingsReturn(r)
 	if s.Restart == nil {
-		s.flash(w, r, "/settings", msg)
+		s.flash(w, r, to, msg)
+		return
+	}
+	if s.requestRestart() {
+		s.flash(w, r, to, msg+" Some changes finish applying when the running job is done.")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: "flash", Value: msg, Path: "/", MaxAge: 30, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	io.WriteString(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="3;url=/settings"><title>Applying settings</title><p>Applying settings…</p>`)
-	go func() {
-		time.Sleep(400 * time.Millisecond) // let this response finish
-		s.Restart()
-	}()
+	// Waits for the reloaded app, then returns. Both values are app-generated.
+	io.WriteString(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="12;url=`+to+`"><title>Applying settings</title><p>Applying settings…</p><script>
+(async()=>{for(;;){try{const r=await fetch("/healthz",{cache:"no-store"});if(r.ok&&r.headers.get("X-Backtrackarr-Boot")!=="`+s.boot+`"){location.replace("`+to+`");return}}catch(e){}await new Promise(d=>setTimeout(d,200))}})()
+</script>`)
 }
 
 // settingsAdopt copies every value still coming from the environment into the
@@ -175,7 +233,7 @@ func (s *Server) settingsAdopt(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, "/settings", "Everything is already stored in the app.")
 		return
 	}
-	if err := s.st.SaveSettings(r.Context(), set, nil); err != nil {
+	if err := s.saveSettings(r.Context(), set, nil); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -209,7 +267,7 @@ func (s *Server) settingsPassword(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	if err := s.st.SaveSettings(r.Context(), map[string]string{config.AdminPasswordKey: h}, nil); err != nil {
+	if err := s.saveSettings(r.Context(), map[string]string{config.AdminPasswordKey: h}, nil); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -312,7 +370,7 @@ func (s *Server) settingsImport(w http.ResponseWriter, r *http.Request) {
 	if auth.IsPasswordHash(b.PasswordHash) {
 		set[config.AdminPasswordKey] = b.PasswordHash
 	}
-	if err := s.st.SaveSettings(r.Context(), set, nil); err != nil {
+	if err := s.saveSettings(r.Context(), set, nil); err != nil {
 		s.fail(w, err)
 		return
 	}

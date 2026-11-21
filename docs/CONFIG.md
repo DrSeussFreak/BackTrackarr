@@ -3,9 +3,11 @@
 > **Settings live in the app.** Open **Settings** to change anything. Values
 > are stored in the database, apply within seconds, and need no redeploy.
 >
-> - **Moving an existing install:** click **Move values into the app**, then
->   switch to [stack-app-settings.yml](../deploy/portainer/stack-app-settings.yml),
->   which has no environment variables.
+> - **Moving an existing install:** start this version once with your current
+>   variables. It copies them into the app automatically, with the password
+>   hashed. Then switch to
+>   [stack-app-settings.yml](../deploy/portainer/stack-app-settings.yml), which
+>   has no environment variables. After that, the app's values always win.
 > - **New install:** start it, then set a password on **Settings** right away.
 >   Until then, anyone who can reach the app can use it.
 > - **Backups:** **Back up settings** downloads an encrypted file with every
@@ -18,7 +20,7 @@
 > - **Locked out by a saved value?** Start once with `SETTINGS_IGNORE=true` and
 >   `ADMIN_PASSWORD` set. Saved values are kept but not used until you remove it.
 >
-> The rest of this page describes each setting. Its names match the small
+> **Setup** in the menu is the easy way in: Sign in with Plex fills in the token, server, users and libraries, and Find my apps locates Sonarr, Radarr, Jellyseerr and others. The rest of this page describes each setting. Its names match the small
 > labels on the Settings page.
 
 Answer the questions you need. Every answer becomes one `NAME=value` line,
@@ -238,7 +240,7 @@ Default `false`.
 
 ## 9. Comics and backups (optional)
 
-**`CLZ_IMPORT_DIR`**: Folder BackTrackarr watches for CLZ Comics CSV
+**`CLZ_IMPORT_DIR`**: Folder BackTrackarr watches for CLZ Comics XML or CSV
 exports. Default `/data/import/clz`.
 
 **`BACKUP_KEEP`**: How many daily backups should be kept? Default `7`.

@@ -20,7 +20,8 @@ import (
 //	5: settings saved from the web UI; new table only, created by schema.sql
 //	6: books, audiobooks and games (shelf_items, shelf_events); new tables
 //	   only, created by schema.sql
-const schemaVersion = 6
+//	7: import_extras (watchlists, lists and more from imports); new table only
+const schemaVersion = 7
 
 func hasTable(db *sql.DB, name string) (bool, error) {
 	var n int

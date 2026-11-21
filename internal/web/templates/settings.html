@@ -45,15 +45,19 @@
   </section>
 </div>
 
-<form method="post" action="/settings" autocomplete="off">
+<p class="small"><b>Only need the basics?</b> Fill in what's marked <span class="level Essential">Essential</span>. Anything <span class="level Optional">Optional</span> or <span class="level Advanced">Advanced</span> can be skipped unless you use what it says it's for.</p>
+<form method="post" action="/settings" autocomplete="off" novalidate>
   {{range .Groups}}
   <details class="panel" {{if eq .Name "General"}}open{{end}}>
-    <summary><b>{{.Name}}</b></summary>
+    <summary><b>{{.Name}}</b>{{with .Help}}<span class="muted small">{{.}}</span>{{end}}</summary>
     <table>
       {{range .Rows}}
       <tr>
-        <td><label for="{{.Key}}"><b>{{.Label}}</b></label>{{if .Help}}<div class="muted small">{{.Help}}</div>{{end}}<div class="muted small mono">{{.Key}}</div></td>
+        <td><label for="{{.Key}}"><b>{{.Label}}</b></label>{{with .Info.Level}}<span class="level {{.}}">{{.}}</span>{{end}}
+          <div class="needed">{{.Info.What}}</div>
+          <div class="muted small"><b>Needed for:</b> {{.Info.Needed}}</div>{{if .Help}}<div class="muted small">{{.Help}}</div>{{end}}<div class="muted small mono">{{.Key}}</div></td>
         <td>
+          {{if ne .Type "secret"}}<input type="hidden" name="was_{{.Key}}" value="{{.Value}}">{{end}}
           {{if eq .Type "bool"}}
             <select id="{{.Key}}" name="{{.Key}}"><option value="true" {{if eq .Value "true"}}selected{{end}}>On</option><option value="false" {{if eq .Value "false"}}selected{{end}}>Off</option></select>
           {{else if eq .Type "choice"}}
