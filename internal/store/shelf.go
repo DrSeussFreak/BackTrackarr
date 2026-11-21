@@ -118,6 +118,16 @@ func (s *Store) ShelfItemID(ctx context.Context, source, key string) (int64, err
 	return id, err
 }
 
+// ShelfTitle returns a stored title, or "" if it isn't stored yet.
+func (s *Store) ShelfTitle(ctx context.Context, source, key string) (string, error) {
+	var title string
+	err := s.q(ctx).QueryRowContext(ctx, `SELECT title FROM shelf_items WHERE source=? AND ext_key=?`, source, key).Scan(&title)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return title, err
+}
+
 // TouchShelfItem updates progress on a title that is already stored.
 func (s *Store) TouchShelfItem(ctx context.Context, id int64, status string, progress float64, last int64) error {
 	_, err := s.q(ctx).ExecContext(ctx, `UPDATE shelf_items SET status=COALESCE(?,status), progress=COALESCE(?,progress),

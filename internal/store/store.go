@@ -587,6 +587,8 @@ type Session struct {
 	Progress  float64
 	Scrobbled bool
 	UpdatedAt time.Time
+	Player    string
+	Source    string
 }
 
 func (s *Store) GetSession(ctx context.Context, key string) (*Session, error) {
@@ -605,10 +607,11 @@ func (s *Store) GetSession(ctx context.Context, key string) (*Session, error) {
 }
 
 func (s *Store) PutSession(ctx context.Context, ss Session) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO sessions(key,media_id,user,state,progress,scrobbled,updated_at) VALUES(?,?,?,?,?,?,?)
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO sessions(key,media_id,user,state,progress,scrobbled,updated_at,player,source) VALUES(?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(key) DO UPDATE SET media_id=excluded.media_id, user=excluded.user, state=excluded.state,
-		progress=excluded.progress, scrobbled=excluded.scrobbled, updated_at=excluded.updated_at`,
-		ss.Key, ss.MediaID, ss.User, ss.State, ss.Progress, ss.Scrobbled, time.Now().Unix())
+		progress=excluded.progress, scrobbled=excluded.scrobbled, updated_at=excluded.updated_at,
+		player=excluded.player, source=excluded.source`,
+		ss.Key, ss.MediaID, ss.User, ss.State, ss.Progress, ss.Scrobbled, time.Now().Unix(), ns(ss.Player), ns(ss.Source))
 	return err
 }
 

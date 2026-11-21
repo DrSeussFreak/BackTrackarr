@@ -6,6 +6,12 @@
 
 {{if .NeedsSetup}}<p class="flash"><b>Finish setting up.</b> <a class="btn" href="/setup">Start setup →</a></p>{{end}}
 
+<section class="panel" id="now-playing">
+  <h2>Now playing</h2>
+  <div data-list><p class="muted small">Checking…</p></div>
+</section>
+<script src="/static/nowplaying.js" defer></script>
+
 {{with .Stats}}
 <section class="cards">
   <div class="card"><div class="k">Total plays</div><div class="v">{{num .Plays}}</div></div>

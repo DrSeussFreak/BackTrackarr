@@ -65,6 +65,13 @@ var settingInfo = map[string]Info{
 
 	"ARR_ARCHIVE_HOURS": {"How often Sonarr, Radarr and Whisparr are backed up.", "Their library and settings archive.", optional},
 
+	"TAUTULLI_URL":     {"Your Tautulli address.", "Importing Plex history from Tautulli. Skip if you don't use it.", optional},
+	"TAUTULLI_API_KEY": {"Its API key.", "Importing Plex history from Tautulli.", optional},
+	"CROSSWATCH_URL":   {"Your CrossWatch address.", "Importing history and ratings from CrossWatch. Skip if you don't use it.", optional},
+	"CROSSWATCH_TOKEN": {"Its API token.", "Importing history and ratings from CrossWatch.", optional},
+	"PLEKT_URL":        {"Your Plekt address.", "Importing watch history from Plekt. Skip if you don't use it.", optional},
+	"PLEKT_API_KEY":    {"Its API key.", "Importing watch history from Plekt.", optional},
+
 	"SEERR_URL":     {"Your Jellyseerr or Overseerr address.", "The Request button on recommendations. Skip if you don't use one.", optional},
 	"SEERR_API_KEY": {"Its API key.", "The Request button on recommendations.", optional},
 
@@ -99,6 +106,7 @@ var GroupHelp = map[string]string{
 	"Streaming":                "Add a TMDB key if you import streaming history. The rest is optional.",
 	"AI recommendations":       "Skip unless you want the For you page.",
 	"Comics and backups":       "The defaults are fine.",
+	"History imports":          "Skip unless you want history from Tautulli, CrossWatch or Plekt. Floppy uses its own section.",
 	"Requests":                 "Skip unless you use Jellyseerr or Overseerr.",
 	"Books and audiobooks":     "Fill in only the services you use.",
 	"Games":                    "Fill in only the services you use.",

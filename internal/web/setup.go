@@ -145,7 +145,7 @@ func (s *Server) setupPage(w http.ResponseWriter, r *http.Request) {
 		apps = append(apps, setupConnected{Label: m.Name, URL: m.URL})
 	}
 	c := s.cfg.Shelf
-	for _, a := range []setupConnected{{"Jellyseerr / Overseerr", s.cfg.SeerrURL}, {"Audiobookshelf", c.AudiobookshelfURL}, {"Komga", c.KomgaURL}, {"Kavita", c.KavitaURL}, {"RomM", c.RommURL}} {
+	for _, a := range []setupConnected{{"Jellyseerr / Overseerr", s.cfg.SeerrURL}, {"Tautulli", s.cfg.TautulliURL}, {"Floppy", s.cfg.FloppyURL}, {"CrossWatch", s.cfg.CrossWatchURL}, {"Plekt", s.cfg.PlektURL}, {"Audiobookshelf", c.AudiobookshelfURL}, {"Komga", c.KomgaURL}, {"Kavita", c.KavitaURL}, {"RomM", c.RommURL}} {
 		if a.URL != "" {
 			apps = append(apps, a)
 		}
@@ -334,7 +334,7 @@ func (s *Server) setupScan(w http.ResponseWriter, r *http.Request) {
 		add(m.URL)
 	}
 	c := s.cfg.Shelf
-	for _, u := range []string{s.cfg.SeerrURL, c.AudiobookshelfURL, c.KomgaURL, c.KavitaURL, c.RommURL} {
+	for _, u := range []string{s.cfg.SeerrURL, s.cfg.TautulliURL, s.cfg.CrossWatchURL, s.cfg.PlektURL, c.AudiobookshelfURL, c.KomgaURL, c.KavitaURL, c.RommURL} {
 		if u != "" {
 			add(u)
 		}
@@ -369,6 +369,14 @@ func appKeys(kind, addr string) (urlKey, keyKey, nameKey string, ok bool) {
 		return "ROMM_URL", "ROMM_TOKEN", "", true
 	case "seerr":
 		return "SEERR_URL", "SEERR_API_KEY", "", true
+	case "tautulli":
+		return "TAUTULLI_URL", "TAUTULLI_API_KEY", "", true
+	case "floppy":
+		return "FLOPPY_URL", "FLOPPY_TOKEN", "", true
+	case "crosswatch":
+		return "CROSSWATCH_URL", "CROSSWATCH_TOKEN", "", true
+	case "plekt":
+		return "PLEKT_URL", "PLEKT_API_KEY", "", true
 	case "sonarr", "radarr", "whisparr", "jellyfin", "emby":
 	default:
 		return "", "", "", false

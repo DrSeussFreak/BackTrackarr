@@ -17,6 +17,7 @@ service that has changed its API since then may need a small fix.
 | **Open Library** | Books | Username | The reading log must be public. One date per book, no ratings or progress. One request a second. |
 | **Goodreads** | Books, audiobooks | CSV export | No usable API. Exports can miss read dates, so a Read Count above the dates given is kept as undated reads. |
 | **StoryGraph** | Books, audiobooks | CSV export | No public API. Multiple read dates are kept. |
+| **Audible** | Audiobooks | Audible Library Extractor CSV, or Amazon Request My Data files | Auto-detected on Books and Import. Keeps authors, narrators, length, progress, your own rating and every original column. A library file has no finish dates, so a finished title counts as one undated listen. Dated sessions come only from listening files, whose format Amazon doesn't document. Audible may keep only a short listening history, so export regularly. |
 | **Steam** | Games | Web API key | Game details must be visible. Steam gives lifetime totals, so sessions are the change between syncs. 100,000 calls a day. |
 | **RetroAchievements** | Retro games | Web API key | Achievement and last-played dates, no playtime. |
 | **RomM** | ROM library | Client API token | Last played, status and rating, no playtime. |
@@ -26,7 +27,7 @@ service that has changed its API since then may need a small fix.
 
 | Source | Reason |
 |---|---|
-| **Audible** | No official API. Amazon's data request is the supported route, and its format isn't documented. A list with a Title column imports on the Books page: choose **All audiobooks**. |
+| **Audible (direct)** | No official API, and BackTrackarr never stores an Amazon login. Use the file route below. |
 | **Calibre, Calibre-Web** | No documented read-history API. Read status is a single flag, shared by all users in Calibre-Web. |
 | **GOG** | No official public playtime API. Use Playnite. |
 | **PlayStation, Xbox, Nintendo** | No official API for your play history. Unofficial ones break and can put an account at risk. Use Playnite where a plugin exists. |
@@ -62,6 +63,33 @@ and any list with a title plus a date or rating. Plays and ratings go into your
 history. Watchlists, lists and comments are kept as raw records. Exports whose
 exact fields aren't published are read by field name, so an unusual file may
 need a small fix.
+
+## Connected history imports
+
+Connect these on **Setup**, then use **Import**. They only read, and refresh daily.
+
+| App | Brings in | How |
+|---|---|---|
+| **Tautulli** | Finished Plex plays for every user | API key |
+| **Floppy** | Movies, episodes and scores | API token, CSV export |
+| **CrossWatch** | Latest history and ratings snapshots | API token |
+| **Plekt** | Watch history | API key, or a `.json.gz` backup file |
+
+These were built from each project's own source or docs and tested against fake
+servers, so a new release of one of them may need a small fix.
+
+## Auto-delete
+
+**Off by default.** A file is deleted only when the master switch is on, its title
+has a rule, and every user on that rule has watched it. It's removed through the
+Sonarr, Radarr or Whisparr that owns it, and unmonitored first so it isn't
+downloaded again.
+
+- Scope it to chosen servers and Plex libraries, by include or exclude list.
+- A double episode is kept until everyone has watched both halves.
+- Titles someone is watching are skipped, and each rule has a waiting period.
+- At most 25 files are removed per run, and every deletion is logged.
+- **Preview** shows what would go and deletes nothing.
 
 ## How counting works
 

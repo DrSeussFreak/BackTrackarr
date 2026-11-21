@@ -239,6 +239,14 @@ func buildSettings() {
 	add(g, "BACKUP_KEEP", "Daily backups to keep", "number", "7", "0 turns backups off.")
 	add(g, "BACKUP_COMPRESS", "Compress backups", "bool", "true", "")
 
+	g = "History imports"
+	add(g, "TAUTULLI_URL", "Tautulli address", "url", "", "")
+	add(g, "TAUTULLI_API_KEY", "Tautulli API key", "secret", "", "From Settings, Web Interface, API.")
+	add(g, "CROSSWATCH_URL", "CrossWatch address", "url", "", "")
+	add(g, "CROSSWATCH_TOKEN", "CrossWatch API token", "secret", "", "From CrossWatch's API tokens settings.")
+	add(g, "PLEKT_URL", "Plekt address", "url", "", "")
+	add(g, "PLEKT_API_KEY", "Plekt API key", "secret", "", "")
+
 	g = "Requests"
 	add(g, "SEERR_URL", "Jellyseerr or Overseerr address", "url", "", "")
 	add(g, "SEERR_API_KEY", "Jellyseerr or Overseerr API key", "secret", "", "From Settings, General, API Key.")

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -64,6 +65,8 @@ type uniRec struct {
 	kind    string // for kept records
 	title   string
 	raw     []byte
+	user    string // overrides the import's user
+	private bool
 }
 
 type uniRun struct {
@@ -73,6 +76,8 @@ type uniRun struct {
 	pending []uniRec
 	formats map[string]bool
 	report  func(string)
+	source  string // set when the app is known
+	yamCSV  bool   // Floppy or Yamtrack export
 }
 
 func (u *uniRun) emit(ctx context.Context, r uniRec) error {
@@ -102,13 +107,17 @@ func (u *uniRun) flush(ctx context.Context) error {
 				}
 				continue
 			}
+			who := r.user
+			if who == "" {
+				who = u.user
+			}
 			m := *r.media
 			if err := u.e.st.UpsertMedia(ctx, &m); err != nil {
 				u.res.Skipped++
 				continue
 			}
 			if r.at > 0 {
-				ins, err := u.e.st.RecordPlay(ctx, m.ID, u.user, time.Unix(r.at, 0), r.source, "", false)
+				ins, err := u.e.st.RecordPlay(ctx, m.ID, who, time.Unix(r.at, 0), r.source, "", r.private)
 				if err != nil {
 					return err
 				}
@@ -126,7 +135,7 @@ func (u *uniRun) flush(ctx context.Context) error {
 				if at == 0 {
 					at = time.Now().Unix()
 				}
-				if err := u.e.st.SetRating(ctx, m.ID, u.user, min(r.rating, 10), time.Unix(at, 0)); err != nil {
+				if err := u.e.st.SetRating(ctx, m.ID, who, min(r.rating, 10), time.Unix(at, 0)); err != nil {
 					return err
 				}
 				u.res.Ratings++
@@ -158,6 +167,14 @@ func (e *Engine) ImportAnything(ctx context.Context, p, name, user string, repor
 	}
 	if n == 4 && bytes.Equal(magic, []byte("PK\x03\x04")) {
 		err = u.readZip(ctx, p)
+	} else if n >= 2 && magic[0] == 0x1f && magic[1] == 0x8b { // gzip, such as a Plekt backup
+		gz, gerr := gzip.NewReader(f)
+		if gerr != nil {
+			return nil, fmt.Errorf("couldn't open the gzip file: %w", gerr)
+		}
+		defer gz.Close()
+		u.res.Files = 1
+		err = u.readFile(ctx, io.LimitReader(gz, uniMaxEntry), strings.TrimSuffix(name, ".gz"))
 	} else {
 		u.res.Files = 1
 		err = u.readFile(ctx, f, name)
@@ -290,21 +307,26 @@ func (u *uniRun) readJSON(ctx context.Context, r io.Reader, name string) error {
 			return err
 		}
 		key, _ := kt.(string)
-		var peek json.RawMessage
-		if err := dec.Decode(&peek); err != nil {
+		val, err := dec.Token()
+		if err != nil {
 			return err
 		}
-		h := hint + "/" + strings.ToLower(key)
-		if t := bytes.TrimSpace(peek); len(t) > 0 && t[0] == '[' {
-			sub := json.NewDecoder(bytes.NewReader(peek))
-			sub.UseNumber()
-			var list []any
-			if err := sub.Decode(&list); err != nil {
+		switch val {
+		case json.Delim('['): // read a large list one row at a time
+			if err := each(hint + "/" + strings.ToLower(key)); err != nil {
 				return err
 			}
-			for _, v := range list {
-				if err := u.jsonItem(ctx, v, h); err != nil {
+		case json.Delim('{'):
+			for depth := 1; depth > 0; {
+				tok, err := dec.Token()
+				if err != nil {
 					return err
+				}
+				switch tok {
+				case json.Delim('{'), json.Delim('['):
+					depth++
+				case json.Delim('}'), json.Delim(']'):
+					depth--
 				}
 			}
 		}
@@ -326,6 +348,8 @@ func uStr(m map[string]any, keys ...string) string {
 			}
 		case json.Number:
 			return v.String()
+		case float64:
+			return strconv.FormatFloat(v, 'f', -1, 64)
 		}
 	}
 	return ""
@@ -392,6 +416,11 @@ func (u *uniRun) jsonItem(ctx context.Context, v any, hint string) error {
 		return nil
 	}
 	source := uSource(hint, el)
+	if u.source != "" {
+		source = u.source
+	} else if strings.Contains(hint, "plekt") || el["media_key"] != nil {
+		source = "plekt-import"
+	}
 	u.formats[strings.TrimSuffix(source, "-import")] = true
 	raw, _ := json.Marshal(el)
 	keep := func(kind, title string) error {
@@ -459,7 +488,55 @@ func (u *uniRun) jsonItem(ctx context.Context, v any, hint string) error {
 		}
 		return nil
 	}
+	if done, err := u.flatItem(ctx, el, source, status); done || err != nil {
+		return err
+	}
 	return keep("other", uStr(el, "title", "name"))
+}
+
+// flatItem reads one-level rows such as Plekt's and CrossWatch's, with either
+// snake_case or camelCase names.
+func (u *uniRun) flatItem(ctx context.Context, el map[string]any, source, status string) (bool, error) {
+	f := make(map[string]any, len(el))
+	for k, v := range el {
+		f[normHeader(k)] = v
+	}
+	if status == "plantowatch" || status == "dropped" {
+		return false, nil
+	}
+	at := uTime(f, "watchedat", "lastwatchedat")
+	rating := uNum(f, "rating", "userrating")
+	ratedAt := uTime(f, "ratedat")
+	title := uStr(f, "title", "name")
+	show := uStr(f, "showtitle", "seriestitle", "show", "series", "grandparenttitle")
+	typ := strings.ToLower(uStr(f, "mediatype", "type"))
+	if (title == "" && show == "") || (at == 0 && rating <= 0) {
+		return false, nil
+	}
+	n := func(keys ...string) int { return int(uNum(f, keys...)) }
+	ids := uIDs(el)
+	if ids.Empty() {
+		ids = model.IDs{IMDB: uStr(f, "imdbid", "imdb"), TMDB: n("tmdbid", "tmdb"), TVDB: n("tvdbid", "tvdb"), Trakt: n("traktid", "trakt")}
+	}
+	year := n("year")
+	var m model.Media
+	switch {
+	case strings.Contains(typ, "episode") && (show != "" || title != ""):
+		if show == "" {
+			show = title
+		}
+		season, ep := n("season", "seasonnumber"), n("episode", "episodenumber", "number")
+		name := uStr(f, "episodetitle")
+		if name == "" {
+			name = "Episode " + strconv.Itoa(ep)
+		}
+		m = model.Media{Kind: model.Episode, ShowTitle: show, Title: name, Season: season, Episode: ep, Year: year, ShowIDs: ids}
+	case typ == "movie" || typ == "film":
+		m = model.Media{Kind: model.Movie, Title: title, Year: year, IDs: ids}
+	default:
+		return false, nil // a show-level row has no single play
+	}
+	return true, u.emit(ctx, uniRec{media: &m, at: at, rating: rating, ratedAt: ratedAt, source: source})
 }
 
 func uEpisode(show map[string]any, season, number int, title string, ids model.IDs, year int) model.Media {
@@ -480,8 +557,10 @@ var uniColumns = map[string][]string{
 	"eptitle": {"episodetitle", "episodename"},
 	"year":    {"year", "releaseyear"},
 	"type":    {"titletype", "type", "mediatype"},
-	"watched": {"watcheddate", "datewatched", "watchedat", "lastwatchedat", "lastwatched", "date", "watchdate"},
-	"rating":  {"yourrating", "myrating", "userrating", "personalrating", "rating"},
+	"watched": {"watcheddate", "datewatched", "watchedat", "lastwatchedat", "lastwatched", "enddate", "date", "watchdate"},
+	"rating":  {"yourrating", "myrating", "userrating", "personalrating", "rating", "score"},
+	"mediaid": {"mediaid"},
+	"extsrc":  {"source"},
 	"rated":   {"daterated", "ratedat"},
 	"imdb":    {"const", "imdbid", "imdb"},
 	"tmdb":    {"tmdbid", "tmdb"},
@@ -513,6 +592,24 @@ func (u *uniRun) readCSV(ctx context.Context, br *bufio.Reader, head []byte, nam
 	if err != nil {
 		return fmt.Errorf("reading header: %w", err)
 	}
+	// Audible library and listening files go to Audiobooks.
+	if kind := audibleKind(header, name); kind != "" {
+		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+		if err := u.flush(ctx); err != nil {
+			return err
+		}
+		h, next, err := shelfRows(tmp)
+		if err != nil {
+			return err
+		}
+		res, err := u.e.importAudibleRows(ctx, h, next, kind)
+		if res != nil {
+			u.shelfDone(res)
+		}
+		return err
+	}
 	// Goodreads and StoryGraph exports belong on the Books page.
 	bookFile := false
 	for _, h := range header {
@@ -543,7 +640,8 @@ func (u *uniRun) readCSV(ctx context.Context, br *bufio.Reader, head []byte, nam
 	if i, ok := col["imdb"]; ok && normHeader(header[i]) == "const" {
 		imdb = true
 	}
-	if !hasRating && !hasURI && !hasShow && !imdb {
+	_, isYam := col["mediaid"]
+	if !hasRating && !hasURI && !hasShow && !imdb && !isYam {
 		// A plain viewing history (Netflix and friends).
 		if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 			return err
@@ -566,7 +664,14 @@ func (u *uniRun) readCSV(ctx context.Context, br *bufio.Reader, head []byte, nam
 		return errors.New("no title column")
 	}
 	source := "csv-import"
+	_, hasMediaID := col["mediaid"]
+	_, hasSrc := col["extsrc"]
+	u.yamCSV = hasMediaID && hasSrc
 	switch {
+	case u.source != "":
+		source = u.source
+	case u.yamCSV:
+		source = "floppy-import"
 	case hasURI:
 		source = "letterboxd-import"
 	case imdb:
@@ -644,6 +749,21 @@ func (u *uniRun) csvRow(ctx context.Context, get func(string) string, header, re
 	num := func(k string) int { n, _ := strconv.Atoi(get(k)); return n }
 	ids := model.IDs{IMDB: get("imdb"), TMDB: num("tmdb"), TVDB: num("tvdb"), Trakt: num("trakt")}
 	typ := strings.ToLower(get("type"))
+	if u.yamCSV {
+		switch strings.ToLower(get("extsrc")) {
+		case "tmdb":
+			ids.TMDB = num("mediaid")
+		case "tvdb":
+			ids.TVDB = num("mediaid")
+		}
+		switch typ {
+		case "movie":
+		case "episode":
+			showName = title
+		default:
+			return keep(strings.ReplaceAll(typ, " ", "-")) // shows, seasons, books and others
+		}
+	}
 	var m model.Media
 	switch {
 	case showName != "" || strings.Contains(typ, "episode"):

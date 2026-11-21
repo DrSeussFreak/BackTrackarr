@@ -144,6 +144,12 @@ func run() (bool, error) {
 	go eng.RunCLZWatcher(ctx)
 	go eng.RunStreamWatcher(ctx)
 	go eng.RunShelfWatcher(ctx)
+	if len(eng.HistorySources(ctx)) > 0 {
+		go eng.RunHistorySources(ctx)
+	}
+	if len(cfg.Arr) > 0 {
+		go eng.RunAutoDelete(ctx) // does nothing until the master switch is on
+	}
 	if cfg.Shelf.SyncEvery > 0 && eng.HasShelfSources(ctx) {
 		go eng.RunShelfSync(ctx)
 	}
@@ -245,7 +251,7 @@ func useDataTemp(dataDir string) {
 func setupThrottle(cfg *config.Config, st *store.Store) *throttle.Transport {
 	t := throttle.Install()
 	c := cfg.Shelf
-	own := []string{cfg.PlexURL, cfg.FloppyURL, cfg.SeerrURL, c.AudiobookshelfURL, c.KomgaURL, c.KavitaURL, c.RommURL}
+	own := []string{cfg.PlexURL, cfg.FloppyURL, cfg.SeerrURL, cfg.TautulliURL, cfg.CrossWatchURL, cfg.PlektURL, c.AudiobookshelfURL, c.KomgaURL, c.KavitaURL, c.RommURL}
 	for _, a := range cfg.Arr {
 		own = append(own, a.URL)
 	}

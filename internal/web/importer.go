@@ -23,7 +23,7 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 	users, _ := s.st.Users(ctx)
 	extras, _ := s.st.ImportExtraCounts(ctx)
 	base := s.baseURL(r)
-	s.render(w, "import", M{"Title": "Import", "Nav": "import", "Users": users, "DefaultUser": s.defaultUser(users), "Extras": extras,
+	s.render(w, "import", M{"Title": "Import", "Nav": "import", "Users": users, "DefaultUser": s.defaultUser(users), "Extras": extras, "Sources": s.eng.HistorySources(ctx),
 		"PlexURL": base + "/webhook/plex/" + s.cfg.WebhookToken, "JellyfinURL": base + "/webhook/jellyfin/" + s.cfg.WebhookToken,
 		"EmbyURL": base + "/webhook/emby/" + s.cfg.WebhookToken, "ScrobbleURL": base + "/api/scrobble/" + s.cfg.WebhookToken,
 		"Jobs": s.eng.Jobs.List(), "Refresh": s.eng.Jobs.AnyRunning(), "Flash": takeFlash(w, r)})

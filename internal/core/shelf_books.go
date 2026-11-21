@@ -782,6 +782,9 @@ func (e *Engine) ImportBooks(ctx context.Context, r io.Reader, mediaType string)
 	if err != nil {
 		return nil, err
 	}
+	if kind := audibleKind(header, ""); kind != "" {
+		return e.importAudibleRows(ctx, header, next, kind)
+	}
 	col := shelfColumns(header, bookColumns)
 	if _, ok := col["title"]; !ok {
 		return nil, fmt.Errorf("no Title column found (columns: %s)", strings.Join(header, ", "))

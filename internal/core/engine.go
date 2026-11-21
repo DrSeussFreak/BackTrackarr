@@ -181,7 +181,7 @@ func (e *Engine) Ingest(ctx context.Context, ev model.Event, skipRelays bool) er
 	switch ev.Action {
 	case model.ActStart, model.ActPause:
 		if err := e.st.PutSession(ctx, store.Session{Key: key, MediaID: ev.Media.ID, User: ev.User,
-			State: ev.Action, Progress: ev.Progress, Scrobbled: done}); err != nil {
+			State: ev.Action, Progress: ev.Progress, Scrobbled: done, Player: ev.Player, Source: ev.Source}); err != nil {
 			return err
 		}
 		if done {
@@ -202,7 +202,7 @@ func (e *Engine) Ingest(ctx context.Context, ev model.Event, skipRelays bool) er
 			return nil
 		}
 		if err := e.st.PutSession(ctx, store.Session{Key: key, MediaID: ev.Media.ID, User: ev.User,
-			State: ev.Action, Progress: ev.Progress, Scrobbled: true}); err != nil {
+			State: ev.Action, Progress: ev.Progress, Scrobbled: true, Player: ev.Player, Source: ev.Source}); err != nil {
 			return err
 		}
 	case model.ActRate:

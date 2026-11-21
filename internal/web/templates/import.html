@@ -5,7 +5,7 @@
 <section class="panel step">
   <h2>Import a file</h2>
   <form method="post" action="/import" enctype="multipart/form-data" class="row">
-    <input type="file" name="file" accept=".zip,.json,.csv,.tsv,.txt,.xml" required aria-label="Export file">
+    <input type="file" name="file" accept=".zip,.gz,.json,.csv,.tsv,.txt,.xml" required aria-label="Export file">
     <input name="user" value="{{.DefaultUser}}" list="import-users" placeholder="Whose history" aria-label="Whose history">
     <datalist id="import-users">{{range .Users}}<option value="{{.Name}}">{{end}}</datalist>
     <button>Import</button>
@@ -20,9 +20,20 @@
       <tr><td><b>Netflix</b></td><td>Viewing history</td><td><a href="https://www.netflix.com/viewingactivity" target="_blank" rel="noopener noreferrer">Viewing activity ↗</a></td></tr>
       <tr><td><b>Amazon</b></td><td>Prime Video history</td><td><a href="https://www.amazon.com/hz/privacy-central/data-requests/preview.html" target="_blank" rel="noopener noreferrer">Request data ↗</a></td></tr>
       <tr><td><b>CLZ Comics</b></td><td>Comics, read dates, ratings</td><td class="muted">XML or CSV export from CLZ</td></tr>
+      <tr><td><b>Plekt</b></td><td>Watch history backup</td><td class="muted">.json.gz from its Backup settings</td></tr>
+      <tr><td><b>Floppy, Yamtrack</b></td><td>History and scores</td><td class="muted">CSV export</td></tr>
       <tr><td><b>Anything else</b></td><td>Any list with a title, plus a date or rating</td><td class="muted">CSV, JSON or ZIP</td></tr>
     </tbody>
   </table>
+</section>
+
+<section class="panel step">
+  <h2>Import from your connected apps</h2>
+  {{if .Sources}}
+  <table>{{range .Sources}}<tr><td><b>{{.Label}}</b></td><td>{{if .Err}}<span class="bad small">{{.Err}}</span>{{else if .Last}}<span class="ok small">imported {{ts .Last}}</span>{{else}}<span class="muted small">not imported yet</span>{{end}}</td>
+    <td><form method="post" action="/import/source/{{.Name}}"><button class="ghost">Import now</button></form></td></tr>{{end}}</table>
+  <p class="muted small">Refreshes daily. Importing twice is safe.</p>
+  {{else}}<p class="muted small">Connect Tautulli, Floppy, CrossWatch or Plekt on <a href="/setup">Setup</a> to pull in their history directly.</p>{{end}}
 </section>
 
 {{template "jobs" .Jobs}}

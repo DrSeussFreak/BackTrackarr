@@ -123,7 +123,7 @@ func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger
 		fm[k] = v
 	}
 	fm["mine"] = eng.IsMyService
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "shelf", "login", "mfa", "security"} {
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
@@ -166,6 +166,7 @@ func (s *Server) Handler() http.Handler {
 	s.routesShelf(admin)
 	s.routesSetup(admin)
 	s.routesImport(root, admin)
+	s.routesAutoDelete(admin)
 	root.Handle("/", s.guard(admin))
 	return root
 }

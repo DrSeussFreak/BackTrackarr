@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   state       TEXT    NOT NULL,
   progress    REAL    NOT NULL DEFAULT 0,
   scrobbled   INTEGER NOT NULL DEFAULT 0,
-  updated_at  INTEGER NOT NULL
+  updated_at  INTEGER NOT NULL,
+  player      TEXT,
+  source      TEXT
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS outbox (
@@ -330,6 +332,27 @@ CREATE TABLE IF NOT EXISTS import_extras (
   imported_at INTEGER NOT NULL
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS import_extras_kind ON import_extras(source, kind);
+
+-- ---------- auto-delete ----------
+-- Who must watch a title before its files may be removed. Off unless enabled.
+CREATE TABLE IF NOT EXISTS autodelete_rules (
+  instance   TEXT    NOT NULL,
+  arr_id     INTEGER NOT NULL,
+  users      TEXT    NOT NULL DEFAULT '[]',
+  enabled    INTEGER NOT NULL DEFAULT 0,
+  grace_days INTEGER NOT NULL DEFAULT 1,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (instance, arr_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS autodelete_log (
+  id       INTEGER PRIMARY KEY,
+  at       INTEGER NOT NULL,
+  instance TEXT    NOT NULL,
+  title    TEXT    NOT NULL,
+  item     TEXT    NOT NULL,
+  users    TEXT    NOT NULL,
+  status   TEXT    NOT NULL
+);
 
 -- ---------- settings saved from the web UI ----------
 -- Override environment variables. An empty value means "use the default".

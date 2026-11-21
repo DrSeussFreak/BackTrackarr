@@ -1,0 +1,83 @@
+{{define "content"}}
+<div class="head"><h1>Auto-delete</h1></div>
+<p class="muted">Removes a file through its Sonarr or Radarr after <b>everyone you assign</b> has watched it. Nothing is deleted unless the master switch and that title's rule are both on.</p>
+
+<form method="post" action="/autodelete/settings" class="panel step">
+  <h2>Master switch and scope</h2>
+  <label class="check"><input type="checkbox" name="master" value="1" {{if .On}}checked{{end}}> <b>Auto-delete is {{if .On}}ON{{else}}off{{end}}</b></label>
+  <div class="grid2">
+    <fieldset>
+      <legend>Servers</legend>
+      <select name="server_mode" aria-label="Server scope">
+        <option value="all" {{if eq .Scope.ServerMode "all"}}selected{{end}}>All servers</option>
+        <option value="include" {{if eq .Scope.ServerMode "include"}}selected{{end}}>Only the checked servers</option>
+        <option value="exclude" {{if eq .Scope.ServerMode "exclude"}}selected{{end}}>All except the checked servers</option>
+      </select>
+      {{range .Servers}}<label class="check"><input type="checkbox" name="servers" value="{{.Name}}" {{if .Checked}}checked{{end}}> {{.Name}}</label>{{else}}<p class="muted small">Connect Sonarr or Radarr on <a href="/setup">Setup</a>.</p>{{end}}
+    </fieldset>
+    <fieldset>
+      <legend>Plex libraries</legend>
+      <select name="library_mode" aria-label="Library scope">
+        <option value="all" {{if eq .Scope.LibraryMode "all"}}selected{{end}}>All libraries</option>
+        <option value="include" {{if eq .Scope.LibraryMode "include"}}selected{{end}}>Only the checked libraries</option>
+        <option value="exclude" {{if eq .Scope.LibraryMode "exclude"}}selected{{end}}>All except the checked libraries</option>
+      </select>
+      {{range .Libraries}}<label class="check"><input type="checkbox" name="libraries" value="{{.Name}}" {{if .Checked}}checked{{end}}> {{.Name}}</label>{{else}}<p class="muted small">Libraries appear after the first Plex archive.</p>{{end}}
+      <p class="muted small">With a library filter on, a title in an unknown library is never deleted.</p>
+    </fieldset>
+  </div>
+  <button onclick="const m=this.form.master; return !m.checked || {{if .On}}true{{else}}confirm('Turn on auto-delete? Files for titles with a rule will be permanently removed once all assigned users watch them.'){{end}}">Save</button>
+</form>
+
+<section class="panel step">
+  <h2>What would be deleted now</h2>
+  <div class="row">
+    <a class="btn ghost" href="/autodelete?preview=1">Preview (deletes nothing)</a>
+    {{if .On}}<form method="post" action="/autodelete/run" class="inline" onsubmit="return confirm('Delete everything that is ready now? This can\'t be undone.')"><button>Run now</button></form>{{end}}
+  </div>
+  {{range .Problems}}<p class="bad small">{{.}}</p>{{end}}
+  {{if .Previewed}}
+  <table>
+    <thead><tr><th>Title</th><th>File</th><th>Server</th><th>Watched by</th><th>Last watched</th></tr></thead>
+    <tbody>{{range .Ready}}<tr><td><b>{{.Title}}</b></td><td class="mono small">{{.Item}}</td><td>{{.Instance}}</td><td class="small">{{range $i, $u := .Users}}{{if $i}}, {{end}}{{$u}}{{end}}</td><td class="mono small">{{ts .LastWatch}}</td></tr>{{else}}<tr><td colspan="5" class="muted">Nothing is ready to delete.</td></tr>{{end}}</tbody>
+  </table>
+  {{end}}
+</section>
+
+{{template "jobs" .Jobs}}
+
+<form method="get" class="filters">
+  <input type="search" name="q" value="{{.Search}}" placeholder="Find a show or movie">
+  <label class="small"><input type="checkbox" name="on" value="1" {{if .OnlyOn}}checked{{end}}> only titles with a rule</label>
+  <button>Filter</button>
+</form>
+<section class="panel">
+  <h2>Shows and movies</h2>
+  {{if not .HasUsers}}<p class="warn small">No users found yet. Connect Plex on <a href="/setup">Setup</a>.</p>{{end}}
+  {{range .Rows}}
+  <details class="rule">
+    <summary><b>{{.Title}}</b>{{if .Year}} <span class="muted small">{{.Year}}</span>{{end}} <span class="muted small">{{.Instance}}</span>
+      {{if .Enabled}}<span class="level Essential">deletes after: {{.Assigned}}</span>{{else}}<span class="muted small">keeps everything</span>{{end}}</summary>
+    <form method="post" action="/autodelete/rule">
+      <input type="hidden" name="instance" value="{{.Instance}}"><input type="hidden" name="arr_id" value="{{.ArrID}}">
+      <fieldset class="services"><legend>Delete after all of these users watch {{if eq .Kind "series"}}an episode{{else}}it{{end}}</legend>
+        {{range .Users}}<label class="check"><input type="checkbox" name="users" value="{{.Name}}" {{if .Checked}}checked{{end}}> {{.Name}}</label>{{end}}
+      </fieldset>
+      <div class="row">
+        <label class="small">Wait <input type="number" name="grace" min="0" value="{{.GraceDays}}" style="width:4.5em"> days after the last watch</label>
+        <label class="check"><input type="checkbox" name="enabled" value="1" {{if .Enabled}}checked{{end}}> Turn on for this title</label>
+        <button>Save</button>
+      </div>
+    </form>
+  </details>
+  {{else}}<p class="muted">No titles yet. Connect Sonarr or Radarr, then run the archive on the Library page.</p>{{end}}
+  {{if .HasMore}}<p class="pager"><a class="btn" href="{{.NextURL}}">More →</a></p>{{end}}
+</section>
+
+{{if .Log}}
+<section class="panel">
+  <h2>Deletion history</h2>
+  <table>{{range .Log}}<tr><td class="mono small nowrap">{{ts .At}}</td><td><b>{{.Title}}</b> <span class="mono small">{{.Item}}</span></td><td>{{.Instance}}</td><td class="small">{{.Users}}</td><td class="{{if eq .Status "deleted"}}ok{{else}}bad{{end}} small">{{.Status}}</td></tr>{{end}}</table>
+</section>
+{{end}}
+{{end}}

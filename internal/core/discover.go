@@ -31,6 +31,10 @@ var AppKinds = []AppKind{
 	{"radarr", "Radarr", []int{7878, 7879}, "/settings/general", "Settings, General, API Key"},
 	{"whisparr", "Whisparr", []int{6969}, "/settings/general", "Settings, General, API Key"},
 	{"seerr", "Jellyseerr / Overseerr", []int{5055}, "/settings", "Settings, General, API Key"},
+	{"tautulli", "Tautulli", []int{8181}, "/settings#tab_tabs-web_interface", "Settings, Web Interface, API key"},
+	{"floppy", "Floppy", []int{8000}, "/settings/integrations", "Settings, Integrations, API Token"},
+	{"crosswatch", "CrossWatch", []int{8787}, "/", "CrossWatch settings, API tokens"},
+	{"plekt", "Plekt", nil, "/settings", "Plekt settings, API key"},
 	{"jellyfin", "Jellyfin", []int{8096}, "/web/#/dashboard/keys", "Dashboard, API Keys, +"},
 	{"emby", "Emby", []int{8096}, "/web/index.html#!/apikeys", "Settings, Advanced, API Keys"},
 	{"audiobookshelf", "Audiobookshelf", []int{13378}, "/config/users", "Settings, Users, your user, API token"},
@@ -99,7 +103,7 @@ func identifyApp(ctx context.Context, base string) string {
 		return ""
 	}
 	title, _, _ := strings.Cut(rest, "</title")
-	for _, k := range []string{"seerr", "sonarr", "radarr", "whisparr", "komga", "kavita", "romm"} {
+	for _, k := range []string{"tautulli", "crosswatch", "plekt", "floppy", "seerr", "sonarr", "radarr", "whisparr", "komga", "kavita", "romm"} {
 		if strings.Contains(title, k) {
 			return k
 		}
@@ -207,6 +211,14 @@ func TestApp(ctx context.Context, kind, base, key string) (string, error) {
 		path, header = "/api/v3/system/status", "X-Api-Key"
 	case "seerr":
 		path, header = "/api/v1/auth/me", "X-Api-Key"
+	case "tautulli":
+		path, header = "/api/v2?"+url.Values{"apikey": {strings.TrimSpace(key)}, "cmd": {"arnold"}}.Encode(), "X-Unused"
+	case "floppy":
+		path, header, prefix = "/api/v1/media", "Authorization", "Bearer "
+	case "crosswatch":
+		path, header, prefix = "/api/app-auth/tokens/whoami", "Authorization", "Bearer "
+	case "plekt":
+		path, header = "/api/backup/export?collection=watchHistory&limit=1", "X-Api-Key"
 	case "jellyfin", "emby":
 		path, header = "/System/Info", "X-Emby-Token"
 	case "audiobookshelf":

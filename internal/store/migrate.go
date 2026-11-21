@@ -21,7 +21,8 @@ import (
 //	6: books, audiobooks and games (shelf_items, shelf_events); new tables
 //	   only, created by schema.sql
 //	7: import_extras (watchlists, lists and more from imports); new table only
-const schemaVersion = 7
+//	8: sessions.player and source (Now Playing), auto-delete tables
+const schemaVersion = 8
 
 func hasTable(db *sql.DB, name string) (bool, error) {
 	var n int
@@ -64,6 +65,13 @@ func migrate(db *sql.DB) error {
 	if ver < 3 {
 		if err := addColumn(db, "recs", "providers", "TEXT"); err != nil {
 			return fmt.Errorf("to version 3: %w", err)
+		}
+	}
+	if ver < 8 {
+		for _, col := range []string{"player", "source"} {
+			if err := addColumn(db, "sessions", col, "TEXT"); err != nil {
+				return fmt.Errorf("to version 8: %w", err)
+			}
 		}
 	}
 	return nil

@@ -37,7 +37,7 @@
       {{if not .IsGames}}<select name="type" aria-label="Import as"><option value="">Detect type</option><option value="book">All books</option><option value="audiobook">All audiobooks</option></select>{{end}}
       <button>Import</button>
     </form>
-    <p class="muted small">{{if .IsGames}}Playnite JSON or CSV, or any list with a Name column. Playnite is the route for GOG, PlayStation, Xbox and Epic.{{else}}Goodreads or StoryGraph CSV, or any list with a Title column. For an Audible library list, choose All audiobooks.{{end}} Re-importing is safe. Files dropped in <code>{{.Dir}}</code> are imported automatically.</p>
+    <p class="muted small">{{if .IsGames}}Playnite JSON or CSV, or any list with a Name column. Playnite is the route for GOG, PlayStation, Xbox and Epic.{{else}}Goodreads or StoryGraph CSV, an Audible library export (Audible Library Extractor CSV, or Amazon's Request My Data files), or any list with a Title column. Audible files are detected automatically.{{end}} Re-importing is safe. Files dropped in <code>{{.Dir}}</code> are imported automatically.</p>
   </section>
   <section class="panel">
     {{with .Stats}}

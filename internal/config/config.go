@@ -86,6 +86,14 @@ type Config struct {
 	SeerrURL string // Jellyseerr or Overseerr
 	SeerrKey string
 
+	// Other trackers whose history can be imported. All read-only.
+	TautulliURL     string
+	TautulliKey     string
+	CrossWatchURL   string
+	CrossWatchToken string
+	PlektURL        string
+	PlektKey        string
+
 	// Sign-in. AuthReset removes MFA and passkeys at startup (lost authenticator).
 	SessionTTL time.Duration
 	TrustProxy bool
@@ -214,6 +222,12 @@ func Load() *Config {
 		TimeZone:          env("TZ", ""),
 		SeerrURL:          strings.TrimRight(env("SEERR_URL", ""), "/"),
 		SeerrKey:          env("SEERR_API_KEY", ""),
+		TautulliURL:       strings.TrimRight(env("TAUTULLI_URL", ""), "/"),
+		TautulliKey:       env("TAUTULLI_API_KEY", ""),
+		CrossWatchURL:     strings.TrimRight(env("CROSSWATCH_URL", ""), "/"),
+		CrossWatchToken:   env("CROSSWATCH_TOKEN", ""),
+		PlektURL:          strings.TrimRight(env("PLEKT_URL", ""), "/"),
+		PlektKey:          env("PLEKT_API_KEY", ""),
 		SessionTTL:        time.Duration(envInt("SESSION_DAYS", 30)) * 24 * time.Hour,
 		TrustProxy:        envBool("TRUST_PROXY", false),
 		AuthReset:         envBool("AUTH_RESET", false),

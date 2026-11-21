@@ -266,6 +266,13 @@ encrypted file with every key. Daily database backups are integrity-checked
 before older ones are rotated out. Outbound calls are throttled per site to
 avoid rate limits and lockouts.
 
+## Now Playing and auto-delete
+
+The dashboard shows what's playing right now from Plex, Jellyfin, Emby and the
+browser scrobbler. **Auto-delete** can remove an episode or movie through Sonarr
+or Radarr after every user you assign has watched it. It deletes nothing unless
+you turn it on. See [docs/MEDIA_SOURCES.md](docs/MEDIA_SOURCES.md).
+
 ## Recommendations (Claude and Gemini)
 
 **For you** sends a taste profile to Claude and/or Gemini, using your own

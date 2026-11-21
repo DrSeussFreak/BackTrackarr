@@ -129,3 +129,12 @@ summary .muted { font-weight: 400; margin-left: 8px; }
 header.top { flex-wrap: wrap; height: auto; row-gap: 4px; }
 header.top nav { flex-wrap: wrap; overflow: visible; min-width: 0; flex: 1 1 auto; }
 header.top nav a { white-space: nowrap; }
+
+.np { padding: 8px 0; border-top: 1px solid var(--line); display: grid; gap: 3px; }
+.np:first-child { border-top: 0; }
+.np .track { display: block; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.np .fill { display: block; height: 100%; background: var(--accent); }
+details.rule { border-top: 1px solid var(--line); padding: 8px 0; }
+details.rule summary { cursor: pointer; }
+details.rule form { padding: 10px 0 4px; }
+.step fieldset select { margin-bottom: 6px; }
