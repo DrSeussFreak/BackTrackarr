@@ -184,6 +184,11 @@ func (e *Engine) Ingest(ctx context.Context, ev model.Event, skipRelays bool) er
 			State: ev.Action, Progress: ev.Progress, Scrobbled: done, Player: ev.Player, Source: ev.Source}); err != nil {
 			return err
 		}
+		if ev.Action == model.ActStart && ev.Player != "" && strings.HasPrefix(ev.Source, "plex") {
+			if err := e.st.EndOtherPlexSessions(ctx, ev.User, ev.Player, key); err != nil {
+				return err
+			}
+		}
 		if done {
 			return nil
 		}

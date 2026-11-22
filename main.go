@@ -132,6 +132,9 @@ func run() (bool, error) {
 	if px != nil && cfg.PlexPoll > 0 {
 		go eng.RunPoller(ctx, cfg.PlexPoll)
 	}
+	if px != nil {
+		go eng.RunNowPlaying(ctx)
+	}
 	if px != nil && cfg.PlexArchiveEvery > 0 {
 		go eng.RunArchiver(ctx)
 	}
