@@ -202,11 +202,17 @@ func buildSettings() {
 	add(g, "PLEX_POLL_SECONDS", "Poll sessions every (seconds)", "number", "0", "Use 10 without Plex Pass. 0 uses webhooks.")
 	add(g, "SCROBBLE_USERS", "Users sent to other services", "text", "", "Comma-separated. Blank means the server owner.")
 	add(g, "PRIVATE_LIBRARIES", "Private libraries", "text", "", "Comma-separated. Stored here, never sent anywhere.")
-	add(g, "WATCHED_PERCENT", "Counts as watched at (%)", "percent", "80", "")
 	add(g, "PLEX_ARCHIVE_MINUTES", "Archive every (minutes)", "number", "60", "0 turns it off.")
 	add(g, "PLEX_WATCH_SCAN_SECONDS", "Check for Mark as watched (seconds)", "number", "300", "0 turns it off.")
 	add(g, "PLEX_ALL_USERS", "Include shared and managed users", "bool", "true", "")
 	add(g, "PLEX_ALLOW_WRITES", "Allow changes to Plex", "bool", "false", "Needed only for restores and copying playlists.")
+
+	g = "Counts as finished"
+	add(g, "WATCHED_PERCENT", "Movies and TV (%)", "percent", "90", "")
+	add(g, "MUSIC_FINISHED_PERCENT", "Music (%)", "percent", "90", "")
+	add(g, "BOOK_FINISHED_PERCENT", "Books (%)", "percent", "90", "")
+	add(g, "AUDIOBOOK_FINISHED_PERCENT", "Audiobooks (%)", "percent", "90", "")
+	add(g, "COMIC_FINISHED_PERCENT", "Comics (%)", "percent", "90", "")
 
 	g = "Trakt and Simkl"
 	add(g, "TRAKT_CLIENT_ID", "Trakt client ID", "text", "", "")

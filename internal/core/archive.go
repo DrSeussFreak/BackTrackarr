@@ -416,13 +416,20 @@ func (e *Engine) scanSection(ctx context.Context, u PlexUser, sec plex.Section, 
 			if it.LastViewedAt <= checkpoint {
 				return errStop
 			}
-			if it.LastViewedAt > newest {
-				newest = it.LastViewedAt
-			}
 			if first {
 				// First run only sets the checkpoint; past views come from the
 				// history import instead.
+				newest = max(newest, it.LastViewedAt)
 				return errStop
+			}
+			// Plex also moves lastViewedAt during normal playback. Only a finished
+			// item (a view counted, no resume point) is a real "Mark as watched".
+			// An unfinished one stays ahead of the checkpoint and is seen when done.
+			if !markedFinished(it.ViewCount, it.ViewOffset) {
+				continue
+			}
+			if it.LastViewedAt > newest {
+				newest = it.LastViewedAt
 			}
 			md := it.Metadata()
 			m, ok, err := e.Resolve(ctx, &md)
@@ -430,7 +437,7 @@ func (e *Engine) scanSection(ctx context.Context, u PlexUser, sec plex.Section, 
 				continue
 			}
 			ev := model.Event{Action: model.ActWatched, Media: m, User: u.Name, Owner: u.Owner, Progress: 100,
-				At: time.Unix(it.LastViewedAt, 0), Source: "plex-mark", Private: private}
+				At: time.Unix(it.LastViewedAt, 0), Source: plexMarkSource, Private: private}
 			if err := e.Ingest(ctx, ev, false); err != nil {
 				return err
 			}

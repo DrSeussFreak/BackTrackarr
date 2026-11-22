@@ -22,6 +22,8 @@ type Config struct {
 
 	// A play counts as "watched" once progress reaches this percentage.
 	WatchedPercent float64
+	// The same point for other media. Zero means the default of 90.
+	MusicPercent, BookPercent, AudiobookPercent, ComicPercent float64
 
 	PlexURL   string
 	PlexToken string
@@ -184,7 +186,11 @@ func Load() *Config {
 		AdminUser:         env("ADMIN_USER", "admin"),
 		AdminPassword:     env("ADMIN_PASSWORD", ""),
 		WebhookToken:      env("WEBHOOK_TOKEN", ""),
-		WatchedPercent:    envFloat("WATCHED_PERCENT", 80),
+		WatchedPercent:    envFloat("WATCHED_PERCENT", 90),
+		MusicPercent:      envFloat("MUSIC_FINISHED_PERCENT", 90),
+		BookPercent:       envFloat("BOOK_FINISHED_PERCENT", 90),
+		AudiobookPercent:  envFloat("AUDIOBOOK_FINISHED_PERCENT", 90),
+		ComicPercent:      envFloat("COMIC_FINISHED_PERCENT", 90),
 		PlexURL:           strings.TrimRight(env("PLEX_URL", ""), "/"),
 		PlexToken:         env("PLEX_TOKEN", ""),
 		PlexPoll:          time.Duration(envInt("PLEX_POLL_SECONDS", 0)) * time.Second,
@@ -381,4 +387,24 @@ func list(k string) []string {
 		}
 	}
 	return out
+}
+
+// FinishPercent is how far through something must be to count as finished.
+// kind is movie, episode, track, book, audiobook or comic.
+func (c *Config) FinishPercent(kind string) float64 {
+	v := c.WatchedPercent
+	switch kind {
+	case "track":
+		v = c.MusicPercent
+	case "book":
+		v = c.BookPercent
+	case "audiobook":
+		v = c.AudiobookPercent
+	case "comic":
+		v = c.ComicPercent
+	}
+	if v <= 0 || v > 100 {
+		return 90
+	}
+	return v
 }

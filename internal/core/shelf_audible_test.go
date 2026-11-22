@@ -58,8 +58,8 @@ func TestAudibleLibraryAndListening(t *testing.T) {
 	if title, status, _, _, _ := audibleItem(t, st, "asin:B000000003"); title != "Sheets Title" || status != "to-read" {
 		t.Fatalf("sheets row: %q %q", title, status)
 	}
-	if _, status, _, progress, _ := audibleItem(t, st, "asin:B000000004"); status != "reading" || progress < .99 {
-		t.Fatalf("<1 min left: %q %v", status, progress)
+	if _, status, _, progress, _ := audibleItem(t, st, "asin:B000000004"); status != "read" || progress < .99 {
+		t.Fatalf("<1 min left is past the 90%% setting: %q %v", status, progress)
 	}
 
 	// Starting a re-listen must not erase the earlier finish.

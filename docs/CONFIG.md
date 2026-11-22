@@ -98,7 +98,7 @@ but never sent anywhere? Use exact library names, comma-separated, e.g.
 you tick "include adult".
 
 **`WATCHED_PERCENT`**: At what percent does a movie or episode count as
-watched? Default `80`.
+watched? Default `90`. Music, books, audiobooks and comics have their own settings in Settings, under Counts as finished.
 
 Optional:
 - **`PLEX_ARCHIVE_MINUTES`**: How often should BackTrackarr back up your

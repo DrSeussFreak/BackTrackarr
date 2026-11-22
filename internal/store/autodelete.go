@@ -21,13 +21,15 @@ type NowPlayingRow struct {
 	Source    string      `json:"source,omitempty"`
 	Media     model.Media `json:"media"`
 	Display   string      `json:"display"`
+	Counted   bool        `json:"counted"`
+	FinishAt  float64     `json:"finish_at"`
 }
 
 // NowPlaying lists current sessions. A source can vanish without saying it
 // stopped, so sessions that have gone quiet for too long are left out.
 func (s *Store) NowPlaying(ctx context.Context) ([]NowPlayingRow, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT s.user, s.state, s.progress, s.updated_at, COALESCE(s.player,''), COALESCE(s.source,''), `+mediaCols+`
-		FROM sessions s JOIN media m ON m.id=s.media_id WHERE s.state IN (?,?,?) ORDER BY s.updated_at DESC LIMIT 50`,
+	rows, err := s.DB.QueryContext(ctx, `SELECT s.user, s.state, s.progress, s.updated_at, COALESCE(s.player,''), COALESCE(s.source,''), s.scrobbled, `+mediaCols+`
+		FROM sessions s JOIN media m ON m.id=s.media_id WHERE s.state IN (?,?,?) AND COALESCE(s.source,'')<>'plex-mark' ORDER BY s.updated_at DESC LIMIT 50`,
 		model.ActStart, model.ActPause, model.ActWatched)
 	if err != nil {
 		return nil, err
@@ -37,7 +39,7 @@ func (s *Store) NowPlaying(ctx context.Context) ([]NowPlayingRow, error) {
 	out := []NowPlayingRow{}
 	for rows.Next() {
 		var r NowPlayingRow
-		dest := append([]any{&r.User, &r.State, &r.Progress, &r.UpdatedAt, &r.Player, &r.Source}, mediaDest(&r.Media)...)
+		dest := append([]any{&r.User, &r.State, &r.Progress, &r.UpdatedAt, &r.Player, &r.Source, &r.Counted}, mediaDest(&r.Media)...)
 		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}

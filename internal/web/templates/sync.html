@@ -9,7 +9,7 @@
   {{if .HasPlex}}Plex server: <b>connected</b>{{if gt .Cfg.PlexPoll 0}}, polling every {{.Cfg.PlexPoll}}{{end}}.{{else}}Plex server: not configured (episode show IDs and history import need it).{{end}}</p>
   <p class="muted">Sent to external services:
     {{if .Cfg.ScrobbleUsers}}{{range $i, $u := .Cfg.ScrobbleUsers}}{{if $i}}, {{end}}<b>{{$u}}</b>{{end}}{{else}}the server owner only{{end}}.
-    Every user's plays are still stored here. Watched at ≥ {{.Cfg.WatchedPercent}}%.</p>
+    Every user's plays are still stored here. Movies and TV count as watched at {{.Cfg.FinishPercent "movie"}}%. Change this in Settings, under Counts as finished.</p>
 </section>
 
 <section class="panel">

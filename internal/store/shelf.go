@@ -483,3 +483,13 @@ func (s *Store) ShelfStatuses(ctx context.Context, mediaType string) ([]string, 
 	}
 	return out, rows.Err()
 }
+
+// DropProgressFinishes removes finishes inferred from a progress percentage,
+// once the source reports a real finish for the same title.
+func (s *Store) DropProgressFinishes(ctx context.Context, itemID int64) error {
+	_, err := s.q(ctx).ExecContext(ctx, `DELETE FROM shelf_events WHERE item_id=? AND kind='finish' AND ext_id LIKE 't:%'`, itemID)
+	if err == nil {
+		s.shelfGen.Add(1)
+	}
+	return err
+}

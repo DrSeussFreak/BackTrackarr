@@ -16,6 +16,9 @@ type PlexSession struct {
 	PlexKey   string
 	PlexGUID  string
 	UpdatedAt int64
+	User      string
+	MediaID   int64
+	Scrobbled bool
 }
 
 // Active reports whether this row currently shows in Now Playing.
@@ -25,8 +28,8 @@ func (p PlexSession) Active() bool {
 
 // PlexSessions lists recent rows from Plex webhooks and the Plex poller.
 func (s *Store) PlexSessions(ctx context.Context) ([]PlexSession, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT x.key, x.state, COALESCE(x.player,''), COALESCE(m.plex_key,''), COALESCE(m.plex_guid,''), x.updated_at
-		FROM sessions x JOIN media m ON m.id=x.media_id WHERE x.source LIKE 'plex%'`)
+	rows, err := s.DB.QueryContext(ctx, `SELECT x.key, x.state, COALESCE(x.player,''), COALESCE(m.plex_key,''), COALESCE(m.plex_guid,''), x.updated_at, x.user, x.media_id, x.scrobbled
+		FROM sessions x JOIN media m ON m.id=x.media_id WHERE x.source LIKE 'plex%' AND x.source<>'plex-mark'`)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +37,7 @@ func (s *Store) PlexSessions(ctx context.Context) ([]PlexSession, error) {
 	var out []PlexSession
 	for rows.Next() {
 		var p PlexSession
-		if err := rows.Scan(&p.Key, &p.State, &p.Player, &p.PlexKey, &p.PlexGUID, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.Key, &p.State, &p.Player, &p.PlexKey, &p.PlexGUID, &p.UpdatedAt, &p.User, &p.MediaID, &p.Scrobbled); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -61,5 +64,12 @@ func (s *Store) EndSession(ctx context.Context, key string) error {
 func (s *Store) EndOtherPlexSessions(ctx context.Context, user, player, keep string) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE sessions SET state=? WHERE user=? AND player=? AND key<>? AND source LIKE 'plex%' AND state IN (?,?,?)`,
 		model.ActStop, user, player, keep, model.ActStart, model.ActPause, model.ActWatched)
+	return err
+}
+
+// ClearMarkSessions removes the rows older versions left behind when a
+// "Mark as watched" scan wrongly looked like live playback. Plays are kept.
+func (s *Store) ClearMarkSessions(ctx context.Context) error {
+	_, err := s.DB.ExecContext(ctx, `DELETE FROM sessions WHERE source='plex-mark'`)
 	return err
 }

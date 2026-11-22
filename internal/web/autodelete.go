@@ -28,6 +28,9 @@ func (s *Server) apiNowPlaying(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	for i := range rows {
+		rows[i].FinishAt = s.eng.FinishPercent(rows[i].Media.Kind)
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, M{"items": rows})
 }

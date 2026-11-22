@@ -241,6 +241,7 @@ type LibItem struct {
 	ParentIndex          int         `json:"parentIndex"`
 	UserRating           float64     `json:"userRating"`
 	ViewCount            int         `json:"viewCount"`
+	ViewOffset           int64       `json:"viewOffset"`
 	LastViewedAt         int64       `json:"lastViewedAt"`
 	AddedAt              int64       `json:"addedAt"`
 	UpdatedAt            int64       `json:"updatedAt"`

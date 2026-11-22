@@ -186,11 +186,20 @@ func (e *Engine) syncAudiobookshelf(ctx context.Context, report func(string)) (i
 		}
 		if p.IsFinished {
 			status, progress = "finished", 1
+		} else if e.pastFinish(absKind(p.Progress, p.EbookProgress), progress) {
+			status = "finished"
 		}
 		if err := e.st.TouchShelfItem(ctx, id, status, progress, int64(p.LastUpdate/1000)); err != nil {
 			return added, err
 		}
-		if p.IsFinished {
+		if !p.IsFinished {
+			if err := e.progressFinish(ctx, id, user, "audiobookshelf", absKind(p.Progress, p.EbookProgress), progress, int64(p.LastUpdate/1000), &added); err != nil {
+				return added, err
+			}
+		} else {
+			if err := e.st.DropProgressFinishes(ctx, id); err != nil {
+				return added, err
+			}
 			at := p.FinishedAt
 			if at == 0 {
 				at = p.LastUpdate
@@ -276,14 +285,11 @@ func (e *Engine) syncKomga(ctx context.Context, report func(string)) (int, error
 				}
 				at := shelfTime(b.ReadProgress.ReadDate)
 				if b.Media.MediaProfile == "DIVINA" {
-					readAt := int64(0)
-					if b.ReadProgress.Completed {
-						readAt = at
-					}
 					cm := &store.Comic{ExtKey: "komga:" + b.ID, Series: b.SeriesTitle, Issue: b.Metadata.Number, Title: title,
-						ReleaseDate: b.Metadata.ReleaseDate, Barcode: b.Metadata.ISBN, Format: "digital", Read: b.ReadProgress.Completed,
+						ReleaseDate: b.Metadata.ReleaseDate, Barcode: b.Metadata.ISBN, Format: "digital",
 						Raw: map[string]string{"komga": string(raw)}}
-					if err := e.shelfComic(ctx, cm, readAt, "komga", &added); err != nil {
+					fraction := shelfFraction(float64(b.ReadProgress.Page), float64(b.Media.PagesCount))
+					if err := e.shelfComicProgress(ctx, cm, b.ReadProgress.Completed, fraction, at, "komga", &added); err != nil {
 						return err
 					}
 					continue
@@ -298,6 +304,8 @@ func (e *Engine) syncKomga(ctx context.Context, report func(string)) (int, error
 				status, progress := "in-progress", shelfFraction(float64(b.ReadProgress.Page), float64(b.Media.PagesCount))
 				if b.ReadProgress.Completed {
 					status, progress = "finished", 1
+				} else if e.pastFinish("book", progress) {
+					status = "finished"
 				}
 				it := &store.ShelfItem{MediaType: "book", Source: "komga", ExtKey: "book:" + b.ID, Title: title, Creator: creator, Series: b.SeriesTitle,
 					ISBN: b.Metadata.ISBN, Year: shelfYear(b.Metadata.ReleaseDate), Pages: b.Media.PagesCount, Status: status, Progress: progress,
@@ -305,7 +313,14 @@ func (e *Engine) syncKomga(ctx context.Context, report func(string)) (int, error
 				if _, err := e.st.UpsertShelfItem(ctx, it); err != nil {
 					return err
 				}
-				if b.ReadProgress.Completed {
+				if !b.ReadProgress.Completed {
+					if err := e.progressFinish(ctx, it.ID, user, "komga", "book", progress, at, &added); err != nil {
+						return err
+					}
+				} else {
+					if err := e.st.DropProgressFinishes(ctx, it.ID); err != nil {
+						return err
+					}
 					ev := &store.ShelfEvent{ItemID: it.ID, User: user, Kind: "finish", ExtID: "f:" + b.ReadProgress.ReadDate, At: at, Progress: 1,
 						Device: b.ReadProgress.DeviceName, Source: "komga"}
 					if err := e.addEvent(ctx, ev, &added); err != nil {
@@ -394,13 +409,10 @@ func (e *Engine) syncKavita(ctx context.Context, report func(string)) (int, erro
 					}
 					chID := strconv.FormatInt(ch.ChapterID, 10)
 					if !isBook {
-						readAt := int64(0)
-						if ch.Completed {
-							readAt = end
-						}
-						cm := &store.Comic{ExtKey: "kavita:" + chID, Series: h.SeriesName, Issue: ch.Label, Format: "digital", Read: ch.Completed,
+						cm := &store.Comic{ExtKey: "kavita:" + chID, Series: h.SeriesName, Issue: ch.Label, Format: "digital",
 							Raw: map[string]string{"kavita": string(shelfRaw(h))}}
-						if err := e.shelfComic(ctx, cm, readAt, "kavita", &added); err != nil {
+						fraction := shelfFraction(float64(ch.EndPage), float64(ch.TotalPages))
+						if err := e.shelfComicProgress(ctx, cm, ch.Completed, fraction, end, "kavita", &added); err != nil {
 							return err
 						}
 						continue
@@ -412,6 +424,8 @@ func (e *Engine) syncKavita(ctx context.Context, report func(string)) (int, erro
 					status, progress := "in-progress", shelfFraction(float64(ch.EndPage), float64(ch.TotalPages))
 					if ch.Completed {
 						status, progress = "finished", 1
+					} else if e.pastFinish("book", progress) {
+						status = "finished"
 					}
 					it := &store.ShelfItem{MediaType: "book", Source: "kavita", ExtKey: "chapter:" + chID, Title: title, Series: h.SeriesName,
 						Pages: ch.TotalPages, Status: status, Progress: progress, LastActivity: end}
@@ -423,7 +437,14 @@ func (e *Engine) syncKavita(ctx context.Context, report func(string)) (int, erro
 					if err := e.addEvent(ctx, ev, &added); err != nil {
 						return err
 					}
-					if ch.Completed {
+					if !ch.Completed {
+						if err := e.progressFinish(ctx, it.ID, user, "kavita", "book", progress, end, &added); err != nil {
+							return err
+						}
+					} else {
+						if err := e.st.DropProgressFinishes(ctx, it.ID); err != nil {
+							return err
+						}
 						f := &store.ShelfEvent{ItemID: it.ID, User: user, Kind: "finish", ExtID: "f:" + ch.EndTimeUtc, At: end, Progress: 1, Source: "kavita"}
 						if err := e.addEvent(ctx, f, &added); err != nil {
 							return err
@@ -571,12 +592,20 @@ func (e *Engine) syncHardcover(ctx context.Context, report func(string)) (int, e
 					}
 					if finished > 0 {
 						ev.Kind, ev.At, ev.Progress = "finish", finished, 1
+						if err := e.st.DropProgressFinishes(ctx, it.ID); err != nil {
+							return err
+						}
 					}
 					if ev.Kind == "session" && ev.At == 0 {
 						continue // an undated, unfinished read holds nothing to chart
 					}
 					if err := e.addEvent(ctx, ev, &added); err != nil {
 						return err
+					}
+					if ev.Kind == "session" {
+						if err := e.progressFinish(ctx, it.ID, user, "hardcover", it.MediaType, ev.Progress, ev.At, &added); err != nil {
+							return err
+						}
 					}
 				}
 				count := b.ReadCount
@@ -890,4 +919,61 @@ func (e *Engine) ImportBooks(ctx context.Context, r io.Reader, mediaType string)
 		}
 	}
 	return res, nil
+}
+
+// ---------- the "counts as finished" setting ----------
+
+func (e *Engine) pastFinish(kind string, fraction float64) bool {
+	return fraction*100 >= e.cfg.FinishPercent(kind)
+}
+
+// progressFinish records one finish when progress passes the setting. A title
+// that already has a finish is left alone, so a re-read isn't counted early.
+func (e *Engine) progressFinish(ctx context.Context, id int64, user, source, kind string, fraction float64, at int64, n *int) error {
+	if !e.pastFinish(kind, fraction) {
+		return nil
+	}
+	done, err := e.st.HasShelfFinish(ctx, id)
+	if err != nil || done {
+		return err
+	}
+	return e.addEvent(ctx, &store.ShelfEvent{ItemID: id, User: user, Kind: "finish", ExtID: "t:progress", At: at,
+		Progress: fraction, Source: source}, n)
+}
+
+// shelfComicProgress stores a comic and its read. A comic past the setting
+// counts once, and that read is replaced when the source reports it finished.
+func (e *Engine) shelfComicProgress(ctx context.Context, c *store.Comic, completed bool, fraction float64, at int64, source string, n *int) error {
+	past := !completed && e.pastFinish("comic", fraction)
+	c.Read = completed || past
+	if err := e.shelfComic(ctx, c, 0, source, n); err != nil {
+		return err
+	}
+	if completed {
+		if err := e.st.DropProgressReads(ctx, c.ID, source+"-progress"); err != nil {
+			return err
+		}
+		return e.shelfComic(ctx, c, at, source, n)
+	}
+	if !past || at <= 0 {
+		return nil
+	}
+	reads, err := e.st.ComicReadCount(ctx, c.ID)
+	if err != nil || reads > 0 {
+		return err
+	}
+	ok, err := e.st.AddComicRead(ctx, c.ID, time.Unix(at, 0), source+"-progress")
+	if ok {
+		*n++
+	}
+	return err
+}
+
+// absKind tells listening from reading: Audiobookshelf keeps ebook progress
+// in its own field.
+func absKind(audio, ebook float64) string {
+	if audio == 0 && ebook > 0 {
+		return "book"
+	}
+	return "audiobook"
 }

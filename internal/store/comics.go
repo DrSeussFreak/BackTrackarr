@@ -192,3 +192,17 @@ func (s *Store) int64s(ctx context.Context, q string, args ...any) ([]int64, err
 	}
 	return out, rows.Err()
 }
+
+// ComicReadCount says how many reads a comic has.
+func (s *Store) ComicReadCount(ctx context.Context, comicID int64) (int, error) {
+	var n int
+	err := s.q(ctx).QueryRowContext(ctx, `SELECT COUNT(*) FROM comic_reads WHERE comic_id=?`, comicID).Scan(&n)
+	return n, err
+}
+
+// DropProgressReads removes a read inferred from a percentage, once the source
+// reports the comic as really finished.
+func (s *Store) DropProgressReads(ctx context.Context, comicID int64, source string) error {
+	_, err := s.q(ctx).ExecContext(ctx, `DELETE FROM comic_reads WHERE comic_id=? AND source=?`, comicID, source)
+	return err
+}

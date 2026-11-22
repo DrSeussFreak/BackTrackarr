@@ -144,6 +144,9 @@ func (e *Engine) HandlePlexWebhook(ctx context.Context, raw []byte) error {
 		return err
 	}
 	ev.Media = m
+	if act == model.ActWatched && ev.Progress > 0 && ev.Progress < e.watchedAt(m.Kind) {
+		return nil // Plex counted it earlier than your setting; the live check will count it
+	}
 	if act == model.ActRate {
 		ev.Rating = p.Rating
 		if ev.Rating == 0 {
@@ -206,9 +209,12 @@ func (e *Engine) Ingest(ctx context.Context, ev model.Event, skipRelays bool) er
 		if done {
 			return nil
 		}
-		if err := e.st.PutSession(ctx, store.Session{Key: key, MediaID: ev.Media.ID, User: ev.User,
-			State: ev.Action, Progress: ev.Progress, Scrobbled: true, Player: ev.Player, Source: ev.Source}); err != nil {
-			return err
+		// A library scan records a play. Nothing is playing because of it.
+		if ev.Source != plexMarkSource {
+			if err := e.st.PutSession(ctx, store.Session{Key: key, MediaID: ev.Media.ID, User: ev.User,
+				State: ev.Action, Progress: ev.Progress, Scrobbled: true, Player: ev.Player, Source: ev.Source}); err != nil {
+				return err
+			}
 		}
 	case model.ActRate:
 		if err := e.st.SetRating(ctx, ev.Media.ID, ev.User, ev.Rating, ev.At); err != nil {
@@ -528,14 +534,14 @@ func (e *Engine) refreshSections(ctx context.Context) {
 	e.secMu.Unlock()
 }
 
-// watchedAt returns the progress at which a play counts as watched: the
-// configured percentage for video, and 50% (Last.fm's rule) for music.
+// watchedAt returns the progress at which something counts as finished, from
+// the setting for its type.
 func (e *Engine) watchedAt(kind string) float64 {
-	if kind == model.Track {
-		return 50
-	}
-	return e.cfg.WatchedPercent
+	return e.cfg.FinishPercent(kind)
 }
+
+// FinishPercent is the same value, for the web pages.
+func (e *Engine) FinishPercent(kind string) float64 { return e.cfg.FinishPercent(kind) }
 
 // accepts reports whether a sink takes this kind of media. Trakt, Simkl and
 // Floppy are video-only; relays and generic webhooks take everything.

@@ -23,7 +23,15 @@
     fill.className = "fill";
     fill.style.width = Math.max(0, Math.min(100, p.progress || 0)) + "%";
     bar.append(fill);
-    el.append(top, meta, bar);
+    const at = Math.max(0, Math.min(100, p.finish_at || 90));
+    const mark = document.createElement("span");
+    mark.className = "mark";
+    mark.style.left = at + "%";
+    bar.append(mark);
+    const note = document.createElement("div");
+    note.className = "muted small";
+    note.textContent = p.counted ? "Counted" : "Counts at " + at + "%";
+    el.append(top, meta, bar, note);
     return el;
   }
 

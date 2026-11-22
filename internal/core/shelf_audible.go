@@ -258,6 +258,9 @@ func (e *Engine) importAudibleRows(ctx context.Context, header []string, next fu
 					switch {
 					case hasProgress:
 						it.Status, it.Progress = audibleProgress(get("progress"), it.DurationS)
+						if it.Status == "reading" && e.pastFinish("audiobook", it.Progress) {
+							it.Status = "read"
+						}
 					default:
 						it.Status = audibleShelfStatus(get("shelves"))
 						if it.Status == "read" {
