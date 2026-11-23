@@ -1,7 +1,10 @@
 package core
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"os"
 	"path/filepath"
@@ -166,5 +169,69 @@ func TestImportRoutesBooksAndGames(t *testing.T) {
 	}
 	if n := uniCount(t, st, `SELECT COUNT(*) FROM plays`); n != 0 {
 		t.Errorf("books and games must not become movie plays: %d", n)
+	}
+}
+
+const weTrakrTrack = "title,year,type,tmdb_id,imdb_id,show_title,season_number,episode_number,status,tracked_at,updated_at,source,show_tmdb_id,wetrakr_id\n" +
+	"Pilot,2010,episode,501,tt01,Test Show,1,1,watched,2024-01-02T03:04:05.000Z,2024-01-02T03:04:05.000Z,trakt,900,1\n" +
+	"Pilot,2010,episode,501,tt01,Test Show,1,1,watched,2024-02-02T03:04:05.000Z,2024-02-02T03:04:05.000Z,trakt,900,1\n" +
+	"Second,2010,episode,502,,Test Show,1,2,watched,,2026-07-26T00:00:00.000Z,simkl,900,2\n" +
+	"A Movie,2001,movie,77,tt77,,,,watched,2023-05-06T07:08:09.000Z,2023-05-06T07:08:09.000Z,manual,,3\n" +
+	"Test Show,2010,show,900,,,,,dropped,,2026-07-26T00:00:00.000Z,manual,,4\n"
+
+func TestImportWeTrakr(t *testing.T) {
+	e, st := shelfEngine(t, config.ShelfConfig{User: "me"})
+	ctx := context.Background()
+	p := uniZip(t, map[string]string{
+		"export/tracklog.csv": weTrakrTrack,
+		"export/ratings.csv": "title,year,type,tmdb_id,imdb_id,show_title,season_number,episode_number,rating,rated_at,show_tmdb_id,wetrakr_id\n" +
+			"A Movie,2001,movie,77,tt77,,,,8.5,2023-05-07T00:00:00.000Z,,3\nTest Show,2010,show,900,,,,,7,2023-05-07T00:00:00.000Z,,4\n",
+		"export/favorites.csv": "title,year,type,tmdb_id,imdb_id,created_at,wetrakr_id\nA Movie,2001,movie,77,tt77,2023-01-01T00:00:00.000Z,3\n",
+		"export/profile.csv":   "username,email,display_name,joined_at,plan,timezone,country\nsomeone,private@example.com,S,2020,free,UTC,US\n",
+	})
+	for pass := 0; pass < 2; pass++ {
+		if _, err := e.ImportAnything(ctx, p, "wetrakr.zip", "me", nil); err != nil {
+			t.Fatal(err)
+		}
+		if n := uniCount(t, st, `SELECT COUNT(*) FROM plays`); n != 3 {
+			t.Fatalf("pass %d: %d plays, want a rewatch plus a movie (3)", pass, n)
+		}
+	}
+	if n := uniCount(t, st, `SELECT COUNT(*) FROM media WHERE kind='episode' AND show_tmdb=900 AND tmdb=501 AND season=1 AND episode=1`); n != 1 {
+		t.Fatalf("show and episode ids were mixed up: %d", n)
+	}
+	if n := uniCount(t, st, `SELECT COUNT(*) FROM import_extras WHERE source='wetrakr-import' AND kind='watched-undated'`); n != 1 {
+		t.Fatalf("undated watch must be kept, not given a date: %d", n)
+	}
+	if n := uniCount(t, st, `SELECT COUNT(*) FROM import_extras WHERE source='wetrakr-import'`); n != 4 {
+		t.Fatalf("kept records: %d", n)
+	}
+	if n := uniCount(t, st, `SELECT COUNT(*) FROM import_extras WHERE title='someone' OR kind LIKE '%profile%'`); n != 0 {
+		t.Fatal("account details must not be stored")
+	}
+}
+
+func TestImportNestedArchives(t *testing.T) {
+	e, st := shelfEngine(t, config.ShelfConfig{User: "me"})
+	inner, err := os.ReadFile(uniZip(t, map[string]string{"tracklog.csv": weTrakrTrack}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+	tw := tar.NewWriter(gz)
+	tw.WriteHeader(&tar.Header{Name: "backup/wetrakr.zip", Mode: 0o600, Size: int64(len(inner))})
+	tw.Write(inner)
+	tw.Close()
+	gz.Close()
+	p := filepath.Join(t.TempDir(), "all.tgz")
+	if err := os.WriteFile(p, b.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.ImportAnything(context.Background(), p, "all.tgz", "me", nil); err != nil {
+		t.Fatal(err)
+	}
+	if n := uniCount(t, st, `SELECT COUNT(*) FROM plays`); n != 3 {
+		t.Fatalf("%d plays through tgz > zip", n)
 	}
 }

@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/go-webauthn/webauthn v0.18.2
+	github.com/nwaples/rardecode/v2 v2.4.6
 	modernc.org/sqlite v1.34.4
 	rsc.io/qr v0.2.0
 )

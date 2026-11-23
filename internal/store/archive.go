@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,11 +19,20 @@ import (
 // Radarr), kept so it can be rebuilt if a server dies. Full JSON documents
 // are stored zlib-compressed; every earlier version is kept in plex_versions.
 
+// A zlib writer allocates about 1 MB, so bulk imports reuse them.
+var packers = sync.Pool{New: func() any {
+	w, _ := zlib.NewWriterLevel(io.Discard, zlib.BestSpeed)
+	return w
+}}
+
 func pack(b []byte) []byte {
 	var buf bytes.Buffer
-	w, _ := zlib.NewWriterLevel(&buf, zlib.BestSpeed)
+	w := packers.Get().(*zlib.Writer)
+	w.Reset(&buf)
 	w.Write(b)
 	w.Close()
+	w.Reset(io.Discard) // the pool must not keep this buffer alive
+	packers.Put(w)
 	return buf.Bytes()
 }
 

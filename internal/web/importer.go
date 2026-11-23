@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
@@ -36,39 +37,64 @@ func (s *Server) importUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
-	f, hdr, err := r.FormFile("file")
-	if err != nil {
+	uploads := r.MultipartForm.File["file"]
+	if len(uploads) == 0 {
 		s.flash(w, r, "/import", "Choose a file to import.")
 		return
 	}
-	defer f.Close()
-	spool, err := os.CreateTemp("", "backtrackarr-import-*")
-	if err != nil {
-		s.fail(w, err)
-		return
+	var files []core.ImportFile
+	drop := func() {
+		for _, f := range files {
+			os.Remove(f.Path)
+		}
 	}
-	_, err = io.Copy(spool, f)
-	spool.Close()
-	if err != nil {
-		os.Remove(spool.Name())
-		s.flash(w, r, "/import", "Upload failed: "+err.Error())
-		return
+	for _, hdr := range uploads {
+		p, err := spoolUpload(hdr)
+		if err != nil {
+			drop()
+			s.flash(w, r, "/import", "Upload failed: "+err.Error())
+			return
+		}
+		files = append(files, core.ImportFile{Path: p, Name: hdr.Filename})
 	}
-	name, user, p := hdr.Filename, strings.TrimSpace(r.FormValue("user")), spool.Name()
-	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+name, func(ctx context.Context, report func(string)) error {
-		defer os.Remove(p)
-		res, err := s.eng.ImportAnything(ctx, p, name, user, report)
+	label := files[0].Name
+	if len(files) > 1 {
+		label = fmt.Sprintf("%s and %d more", label, len(files)-1)
+	}
+	user := strings.TrimSpace(r.FormValue("user"))
+	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+label, func(ctx context.Context, report func(string)) error {
+		defer drop()
+		res, err := s.eng.ImportFiles(ctx, files, user, report)
 		if res != nil {
 			report(res.String())
 		}
 		return err
 	})
 	if !started {
-		os.Remove(p)
+		drop()
 		s.flash(w, r, "/import", "That file is already importing.")
 		return
 	}
 	back(w, r, "/import")
+}
+
+func spoolUpload(hdr *multipart.FileHeader) (string, error) {
+	f, err := hdr.Open()
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	spool, err := os.CreateTemp("", "backtrackarr-import-*")
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(spool, f)
+	spool.Close()
+	if err != nil {
+		os.Remove(spool.Name())
+		return "", err
+	}
+	return spool.Name(), nil
 }
 
 // apiBrowserHistory receives rows the browser script read from a signed-in

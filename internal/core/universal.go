@@ -1,10 +1,8 @@
 package core
 
 import (
-	"archive/zip"
 	"bufio"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -78,6 +76,7 @@ type uniRun struct {
 	report  func(string)
 	source  string // set when the app is known
 	yamCSV  bool   // Floppy or Yamtrack export
+	total   int64  // bytes read from archives so far
 }
 
 func (u *uniRun) emit(ctx context.Context, r uniRec) error {
@@ -149,35 +148,38 @@ func (u *uniRun) flush(ctx context.Context) error {
 	return err
 }
 
-// ImportAnything reads a file or ZIP already saved at p.
+// ImportFile is one saved upload and its original name.
+type ImportFile struct{ Path, Name string }
+
+// ImportAnything reads a file or archive already saved at p.
 func (e *Engine) ImportAnything(ctx context.Context, p, name, user string, report func(string)) (*UniversalResult, error) {
+	return e.ImportFiles(ctx, []ImportFile{{p, name}}, user, report)
+}
+
+// ImportFiles reads several files as one import, such as an unzipped export
+// folder. A file that can't be read doesn't stop the others.
+func (e *Engine) ImportFiles(ctx context.Context, files []ImportFile, user string, report func(string)) (*UniversalResult, error) {
 	if user == "" {
 		user = e.defaultUser(ctx)
 	}
 	u := &uniRun{e: e, user: user, res: &UniversalResult{}, formats: map[string]bool{}, report: report}
-	f, err := os.Open(p)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	magic := make([]byte, 4)
-	n, _ := io.ReadFull(f, magic)
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, err
-	}
-	if n == 4 && bytes.Equal(magic, []byte("PK\x03\x04")) {
-		err = u.readZip(ctx, p)
-	} else if n >= 2 && magic[0] == 0x1f && magic[1] == 0x8b { // gzip, such as a Plekt backup
-		gz, gerr := gzip.NewReader(f)
-		if gerr != nil {
-			return nil, fmt.Errorf("couldn't open the gzip file: %w", gerr)
+	var err error
+	var failed []string
+	for _, f := range files {
+		ferr := u.readPath(ctx, f.Path, f.Name, 0)
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			break
 		}
-		defer gz.Close()
-		u.res.Files = 1
-		err = u.readFile(ctx, io.LimitReader(gz, uniMaxEntry), strings.TrimSuffix(name, ".gz"))
-	} else {
-		u.res.Files = 1
-		err = u.readFile(ctx, f, name)
+		if ferr == nil {
+			continue
+		}
+		if len(files) == 1 {
+			err = ferr
+			break
+		}
+		u.res.Skipped++
+		failed = append(failed, f.Name)
 	}
 	if ferr := u.flush(ctx); err == nil {
 		err = ferr
@@ -189,6 +191,9 @@ func (e *Engine) ImportAnything(ctx context.Context, p, name, user string, repor
 	if err == nil && u.res.Items == 0 {
 		return u.res, errors.New("nothing readable found in that file")
 	}
+	if err == nil && len(failed) > 0 {
+		err = errors.New("couldn't read: " + strings.Join(failed, ", "))
+	}
 	return u.res, err
 }
 
@@ -196,48 +201,6 @@ func (u *uniRun) shelfDone(res *ShelfImportResult) {
 	u.formats[res.Source] = true
 	u.res.Items += res.Rows
 	u.res.Shelf += res.Rows
-}
-
-func (u *uniRun) readZip(ctx context.Context, p string) error {
-	zr, err := zip.OpenReader(p)
-	if err != nil {
-		return fmt.Errorf("couldn't open the ZIP: %w", err)
-	}
-	defer zr.Close()
-	var total uint64
-	for _, f := range zr.File {
-		base := path.Base(f.Name)
-		if f.FileInfo().IsDir() || strings.HasPrefix(f.Name, "__MACOSX/") || strings.HasPrefix(base, ".") {
-			continue
-		}
-		switch strings.ToLower(path.Ext(base)) {
-		case ".json", ".csv", ".tsv", ".txt", ".xml":
-		default:
-			continue
-		}
-		if u.res.Files >= uniMaxFiles {
-			return errors.New("that ZIP holds too many files")
-		}
-		total += f.UncompressedSize64
-		if f.UncompressedSize64 > uniMaxEntry || total > uniMaxTotal {
-			return errors.New("that ZIP is too large to import")
-		}
-		rc, err := f.Open()
-		if err != nil {
-			u.res.Skipped++
-			continue
-		}
-		u.res.Files++
-		err = u.readFile(ctx, io.LimitReader(rc, uniMaxEntry), f.Name)
-		rc.Close()
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil {
-			u.res.Skipped++ // one bad file doesn't stop the rest
-		}
-	}
-	return nil
 }
 
 func (u *uniRun) readFile(ctx context.Context, r io.Reader, name string) error {
@@ -591,6 +554,13 @@ func (u *uniRun) readCSV(ctx context.Context, br *bufio.Reader, head []byte, nam
 	header, err := cr.Read()
 	if err != nil {
 		return fmt.Errorf("reading header: %w", err)
+	}
+	wt := headerSet(header)
+	if isWeTrakrProfile(wt) {
+		return nil // account details, not history
+	}
+	if isWeTrakr(wt) {
+		return u.readWeTrakr(ctx, cr, header, wt)
 	}
 	// Audible library and listening files go to Audiobooks.
 	if kind := audibleKind(header, name); kind != "" {

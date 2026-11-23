@@ -9,7 +9,7 @@
     const zone = document.createElement("label");
     zone.className = "dropzone";
     const text = document.createElement("span");
-    const empty = "Drop a file here, or click to choose";
+    const empty = input.multiple ? "Drop files here, or click to choose" : "Drop a file here, or click to choose";
     text.textContent = empty;
     const types = document.createElement("span");
     types.className = "muted small";
@@ -19,7 +19,8 @@
 
     const show = () => {
       const f = input.files && input.files[0];
-      text.textContent = f ? "✓ " + f.name : empty;
+      const n = input.files ? input.files.length : 0;
+      text.textContent = !f ? empty : n > 1 ? "✓ " + n + " files" : "✓ " + f.name;
       zone.classList.toggle("has-file", !!f);
       zone.classList.remove("bad-file");
     };
@@ -33,15 +34,17 @@
     zone.addEventListener("drop", (e) => {
       e.preventDefault();
       zone.classList.remove("over");
-      const f = e.dataTransfer.files[0];
-      if (!f) return;
-      if (!allowed(input, f)) {
-        text.textContent = f.name + " isn't a supported file type";
+      const dropped = [...e.dataTransfer.files];
+      if (!dropped.length) return;
+      const chosen = input.multiple ? dropped : dropped.slice(0, 1);
+      const bad = chosen.find((f) => !allowed(input, f));
+      if (bad) {
+        text.textContent = bad.name + " isn't a supported file type";
         zone.classList.add("bad-file");
         return;
       }
       const dt = new DataTransfer();
-      dt.items.add(f);
+      chosen.forEach((f) => dt.items.add(f));
       input.files = dt.files;
       show();
     });

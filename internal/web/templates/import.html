@@ -5,7 +5,7 @@
 <section class="panel step">
   <h2>Import a file</h2>
   <form method="post" action="/import" enctype="multipart/form-data" class="row">
-    <input type="file" name="file" accept=".zip,.gz,.json,.csv,.tsv,.txt,.xml" required aria-label="Export file">
+    <input type="file" name="file" accept=".zip,.rar,.tar,.tgz,.gz,.json,.csv,.tsv,.txt,.xml" multiple required aria-label="Export files">
     <input name="user" value="{{.DefaultUser}}" list="import-users" placeholder="Whose history" aria-label="Whose history">
     <datalist id="import-users">{{range .Users}}<option value="{{.Name}}">{{end}}</datalist>
     <button>Import</button>
@@ -15,6 +15,7 @@
     <tbody>
       <tr><td><b>Trakt</b></td><td>History, ratings, watchlist, lists, comments</td><td><a href="https://trakt.tv/settings/data" target="_blank" rel="noopener noreferrer">Data export ↗</a></td></tr>
       <tr><td><b>Simkl</b></td><td>Movies, shows, anime, ratings, watchlist</td><td><a href="https://simkl.com/apps/backup/" target="_blank" rel="noopener noreferrer">Backup ↗</a></td></tr>
+      <tr><td><b>WeTrakr</b></td><td>History, ratings, lists, favorites, notes</td><td class="muted">ZIP, or select all its CSV files</td></tr>
       <tr><td><b>Letterboxd</b></td><td>Diary, rewatches, ratings, watchlist</td><td><a href="https://letterboxd.com/settings/data/" target="_blank" rel="noopener noreferrer">Export ↗</a></td></tr>
       <tr><td><b>IMDb</b></td><td>Ratings, watchlist</td><td><a href="https://www.imdb.com/list/ratings" target="_blank" rel="noopener noreferrer">Ratings ↗</a></td></tr>
       <tr><td><b>Netflix</b></td><td>Viewing history</td><td><a href="https://www.netflix.com/viewingactivity" target="_blank" rel="noopener noreferrer">Viewing activity ↗</a></td></tr>
@@ -22,7 +23,7 @@
       <tr><td><b>CLZ Comics</b></td><td>Comics, read dates, ratings</td><td class="muted">XML or CSV export from CLZ</td></tr>
       <tr><td><b>Plekt</b></td><td>Watch history backup</td><td class="muted">.json.gz from its Backup settings</td></tr>
       <tr><td><b>Floppy, Yamtrack</b></td><td>History and scores</td><td class="muted">CSV export</td></tr>
-      <tr><td><b>Anything else</b></td><td>Any list with a title, plus a date or rating</td><td class="muted">CSV, JSON or ZIP</td></tr>
+      <tr><td><b>Anything else</b></td><td>Any list with a title, plus a date or rating</td><td class="muted">CSV, JSON, ZIP, RAR or TAR</td></tr>
     </tbody>
   </table>
 </section>
