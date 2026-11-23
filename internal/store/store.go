@@ -95,14 +95,20 @@ func OpenWith(dir string, enc *Encryption) (*Store, error) {
 	return &Store{DB: db, dir: dir, enc: enc, CompressBackups: true}, nil
 }
 
-const dbParams = "_txlock=immediate" +
-	"&_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
+// busyTimeoutMS is how long a single write waits for another writer.
+var busyTimeoutMS = 30000
+
+func dbParams() string {
+	return fmt.Sprintf("_txlock=immediate&_pragma=busy_timeout(%d)", busyTimeoutMS) + dbPragmas
+}
+
+const dbPragmas = "&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
 	"&_pragma=foreign_keys(ON)&_pragma=cache_size(-4000)&_pragma=temp_store(FILE)&_pragma=soft_heap_limit(33554432)" +
 	"&_pragma=journal_size_limit(67108864)&_pragma=wal_autocheckpoint(2000)"
 
 // openDB opens a database file and brings its schema up to date.
 func openDB(path string, key []byte) (*sql.DB, error) {
-	dsn, err := sqliteDSN(path, key, dbParams)
+	dsn, err := sqliteDSN(path, key, dbParams())
 	if err != nil {
 		return nil, err
 	}

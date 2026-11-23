@@ -471,6 +471,15 @@ func (e *Engine) ImportPlex(ctx context.Context, report func(string)) error {
 		if len(items) == 0 {
 			break
 		}
+		// Plex is asked outside the transaction, so a slow lookup never holds
+		// the database's write lock.
+		type plexPlay struct {
+			id      int64
+			user    string
+			at      time.Time
+			private bool
+		}
+		page := make([]plexPlay, 0, len(items))
 		for i := range items {
 			md := &items[i]
 			if md.ViewedAt == 0 {
@@ -478,7 +487,15 @@ func (e *Engine) ImportPlex(ctx context.Context, report func(string)) error {
 			}
 			id, ok := cache[md.RatingKey]
 			if !ok || md.RatingKey == "" {
-				m, ok2, err := e.Resolve(ctx, md)
+				var m model.Media
+				var ok2 bool
+				err := retryBusy(ctx, func() (err error) {
+					m, ok2, err = e.Resolve(ctx, md)
+					return err
+				})
+				if store.IsBusy(err) || ctx.Err() != nil {
+					return fmt.Errorf("stopped at entry %d, import again to continue: %w", start+i, err)
+				}
 				if err != nil {
 					e.log.Warn("import item", "title", md.Title, "err", err)
 					continue
@@ -495,20 +512,50 @@ func (e *Engine) ImportPlex(ctx context.Context, report func(string)) error {
 			if user == "" {
 				user = "account-" + md.AccountID.String()
 			}
-			priv := e.IsPrivateSection(md.LibrarySectionTitle, md.LibrarySectionID.String())
-			ins, err := e.st.RecordPlay(ctx, id, user, time.Unix(md.ViewedAt, 0), "plex-import", "", priv)
-			if err != nil {
-				return err
-			}
-			if ins {
-				added++
-			}
+			page = append(page, plexPlay{id, user, time.Unix(md.ViewedAt, 0),
+				e.IsPrivateSection(md.LibrarySectionTitle, md.LibrarySectionID.String())})
 		}
+		saved := 0
+		if err := e.st.InTx(ctx, func(ctx context.Context) error {
+			saved = 0
+			for _, p := range page {
+				ins, err := e.st.RecordPlay(ctx, p.id, p.user, p.at, "plex-import", "", p.private)
+				if err != nil {
+					return err
+				}
+				if ins {
+					saved++
+				}
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("stopped at entry %d, import again to continue: %w", start, err)
+		}
+		added += saved
 		start += len(items)
 		report(fmt.Sprintf("read %d history entries, %d new plays", start, added))
 	}
 	report(fmt.Sprintf("done: read %d history entries, %d new plays", start, added))
 	return nil
+}
+
+var busyRetryWait = 2 * time.Second
+
+// retryBusy repeats a write that lost out to another writer for up to about
+// two minutes. fn must be safe to run again.
+func retryBusy(ctx context.Context, fn func() error) error {
+	var err error
+	for try := 0; try < 4; try++ {
+		if err = fn(); !store.IsBusy(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(busyRetryWait):
+		}
+	}
+	return err
 }
 
 // ImportTrakt copies the connected Trakt account's history into the local DB

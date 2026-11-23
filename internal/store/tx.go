@@ -64,6 +64,9 @@ func (s *Store) begin(ctx context.Context) (*sql.Tx, error) {
 	}
 }
 
+// IsBusy reports whether another writer held the database for too long.
+func IsBusy(err error) bool { return isBusy(err) }
+
 func isBusy(err error) bool {
 	return errors.Is(err, sqlite3.BUSY) // includes its extended codes
 }

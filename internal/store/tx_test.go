@@ -8,9 +8,9 @@ import (
 
 // A long write elsewhere must delay a transaction, not fail it.
 func TestInTxWaitsPastBusyTimeout(t *testing.T) {
-	if testing.Short() {
-		t.Skip("waits out the 10s busy timeout")
-	}
+	old := busyTimeoutMS
+	busyTimeoutMS = 100
+	defer func() { busyTimeoutMS = old }()
 	s, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -22,7 +22,7 @@ func TestInTxWaitsPastBusyTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 	go func() {
-		time.Sleep(11 * time.Second)
+		time.Sleep(700 * time.Millisecond)
 		holder.Rollback()
 	}()
 	ran := false
