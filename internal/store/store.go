@@ -63,6 +63,8 @@ type Store struct {
 	shelfGen   atomic.Int64
 	shelfMu    sync.Mutex
 	shelfCache map[string]cachedShelf
+	shelfBusy  atomic.Bool
+	shelfCost  atomic.Int64 // how long the last rebuild took, in nanoseconds
 }
 
 type cachedStats struct {

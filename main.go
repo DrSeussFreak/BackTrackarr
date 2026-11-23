@@ -180,6 +180,7 @@ func run() (bool, error) {
 	}
 
 	go st.StatsNow(ctx, "") // have home page totals ready after a restart
+	st.WarmShelfStats()
 
 	ui := web.New(cfg, st, eng, log)
 	ui.Throttle = limiter

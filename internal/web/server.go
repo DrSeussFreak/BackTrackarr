@@ -253,12 +253,15 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		"NeedsSetup": s.cfg.PlexURL == "" || s.cfg.PlexToken == "", "Home": s.homeLayout(r.Context())}
 	// Books and games cover one account each, so they aren't split by Plex user.
 	if user == "" {
-		if b, err := s.st.ShelfStats(r.Context(), ""); err == nil && b.Titles > 0 {
+		b, booksUpdating := s.st.ShelfStatsNow(r.Context(), "")
+		if b != nil && b.Titles > 0 {
 			data["Books"] = b
 		}
-		if g, err := s.st.ShelfStats(r.Context(), "game"); err == nil && g.Titles > 0 {
+		g, gamesUpdating := s.st.ShelfStatsNow(r.Context(), "game")
+		if g != nil && g.Titles > 0 {
 			data["Games"] = g
 		}
+		data["StatsUpdating"] = updating || booksUpdating || gamesUpdating
 		data["ShelfRecent"], _ = s.st.RecentShelfEvents(r.Context(), "all", 10)
 	}
 	s.render(w, "dashboard", data)
