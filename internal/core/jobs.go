@@ -51,6 +51,10 @@ type JobStatus struct {
 	Total    int
 }
 
+// DoneCount and TotalCount are the file counts for the page's number format.
+func (s JobStatus) DoneCount() int64  { return int64(s.Done) }
+func (s JobStatus) TotalCount() int64 { return int64(s.Total) }
+
 func (s JobStatus) CanPause() bool {
 	return s.Durable && !s.Stopping && (s.State == JobRunning || s.State == JobQueued)
 }

@@ -61,7 +61,7 @@
   <table>
     {{range .}}<tr><td><b>{{.Name}}</b></td>
     <td><span class="job-{{.State}}">{{if .Stopping}}stopping{{else}}{{.State}}{{end}}</span></td>
-    <td>{{.Message}}{{if .Total}}{{if gt .Total 1}}<div class="muted small">{{num .Done}} of {{num .Total}} files</div>{{end}}{{end}}{{if .Err}}<div class="bad small">{{.Err}}</div>{{end}}</td>
+    <td>{{.Message}}{{if .Total}}{{if gt .Total 1}}<div class="muted small">{{num .DoneCount}} of {{num .TotalCount}} files</div>{{end}}{{end}}{{if .Err}}<div class="bad small">{{.Err}}</div>{{end}}</td>
     <td class="mono small">{{.Updated.Format "15:04:05"}}</td>
     <td class="job-actions">
       {{if .CanPause}}<form method="post" action="/jobs/{{.ID}}/pause"><button class="ghost">Pause</button></form>{{end}}
