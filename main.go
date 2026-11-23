@@ -134,6 +134,15 @@ func run() (bool, error) {
 	limiter := setupThrottle(cfg, st)
 	all := sinks.Build(cfg, st)
 	eng := core.New(ctx, cfg, st, px, all, log)
+	// Runs before the database closes: jobs stop at a safe point and continue
+	// on the next start.
+	defer func() {
+		cancel()
+		eng.Jobs.Wait(8 * time.Second)
+	}()
+	if err := eng.ResumeJobs(ctx); err != nil {
+		log.Warn("couldn't load saved jobs", "err", err)
+	}
 
 	go eng.RunWorker(ctx)
 	if px != nil && cfg.PlexPoll > 0 {

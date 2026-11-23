@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,18 +39,10 @@ func (s *Server) importUpload(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, "/import", "Upload failed: "+err.Error())
 		return
 	}
-	user := strings.TrimSpace(r.FormValue("user"))
-	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
-		defer done()
-		res, err := s.eng.ImportFiles(ctx, files, user, report)
-		if res != nil {
-			report(res.String())
-		}
-		return err
-	})
-	if !started {
-		done()
-		s.flash(w, r, "/import", "That file is already importing.")
+	defer done()
+	err = s.eng.StartFileImport("import ← "+uploadLabel(files), files, core.FileImport{Mode: "import", User: strings.TrimSpace(r.FormValue("user"))})
+	if err != nil {
+		s.flash(w, r, "/import", "Upload failed: "+err.Error())
 		return
 	}
 	back(w, r, "/import")

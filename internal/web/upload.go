@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -262,58 +260,4 @@ func spoolUpload(hdr *multipart.FileHeader) (string, error) {
 		return "", err
 	}
 	return spool.Name(), nil
-}
-
-func isJSONFile(name string) bool {
-	return strings.EqualFold(filepath.Ext(name), ".json")
-}
-
-// importJSON sends a JSON file to the importer that works out its format.
-func (s *Server) importJSON(ctx context.Context, f *os.File, name string, report func(string)) error {
-	res, err := s.eng.ImportFiles(ctx, []core.ImportFile{{Path: f.Name(), Name: name}}, "", report)
-	if res != nil {
-		report(res.String())
-	}
-	return err
-}
-
-// eachUpload runs fn on every file, so one bad file doesn't stop the batch.
-func eachUpload(files []core.ImportFile, report func(string), fn func(f *os.File, name string) (string, error)) error {
-	var failed []string
-	last := ""
-	for i, u := range files {
-		if len(files) > 1 {
-			report(fmt.Sprintf("file %d of %d: %s", i+1, len(files), u.Name))
-		}
-		f, err := os.Open(u.Path)
-		if err == nil {
-			last, err = fn(f, u.Name)
-			f.Close()
-		}
-		if err != nil {
-			failed = append(failed, u.Name+": "+err.Error())
-		}
-	}
-	if len(files) > 1 {
-		report(fmt.Sprintf("%d of %d files imported", len(files)-len(failed), len(files)))
-	} else if last != "" {
-		report(last)
-	}
-	if len(failed) == 0 {
-		return nil
-	}
-	shown := failed
-	more := ""
-	if len(shown) > 5 {
-		more = fmt.Sprintf(" and %d more", len(shown)-5)
-		shown = shown[:5]
-	}
-	msg := ""
-	for i, f := range shown {
-		if i > 0 {
-			msg += "; "
-		}
-		msg += f
-	}
-	return errors.New(msg + more)
 }

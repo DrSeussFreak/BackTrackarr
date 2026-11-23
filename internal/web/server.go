@@ -126,7 +126,7 @@ func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger
 	}
 	fm["mine"] = eng.IsMyService
 	fm["asset"] = assetURL
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security", "encryption"} {
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security", "encryption", "jobs"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
@@ -151,6 +151,7 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("POST /home/layout/reset", s.homeReset)
 	admin.HandleFunc("POST /import/everything", s.importEverything)
 	admin.HandleFunc("POST /upload/chunk", s.uploadChunk)
+	s.routesJobs(admin)
 	admin.HandleFunc("GET /history", s.history)
 	admin.HandleFunc("POST /plays/{id}/delete", s.deletePlay)
 	admin.HandleFunc("GET /sync", s.syncPage)
@@ -484,7 +485,10 @@ func (s *Server) retry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) importPlex(w http.ResponseWriter, r *http.Request) {
-	s.eng.Jobs.Start(s.eng.Context(), "import ← plex", s.eng.ImportPlex)
+	if _, err := s.eng.StartPlexImport(); err != nil {
+		s.flash(w, r, "/sync", "Couldn't start the import: "+err.Error())
+		return
+	}
 	back(w, r, "/sync")
 }
 
@@ -494,9 +498,10 @@ func (s *Server) importTrakt(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing user", http.StatusBadRequest)
 		return
 	}
-	s.eng.Jobs.Start(s.eng.Context(), "import ← trakt", func(ctx context.Context, report func(string)) error {
-		return s.eng.ImportTrakt(ctx, user, report)
-	})
+	if _, err := s.eng.StartTraktImport(user); err != nil {
+		s.flash(w, r, "/sync", "Couldn't start the import: "+err.Error())
+		return
+	}
 	back(w, r, "/sync")
 }
 

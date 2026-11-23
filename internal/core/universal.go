@@ -145,6 +145,8 @@ func (u *uniRun) flush(ctx context.Context) error {
 	return err
 }
 
+var errNothingReadable = errors.New("nothing readable found in that file")
+
 // ImportFile is one saved upload and its original name.
 type ImportFile struct{ Path, Name string }
 
@@ -186,7 +188,7 @@ func (e *Engine) ImportFiles(ctx context.Context, files []ImportFile, user strin
 	}
 	sort.Strings(u.res.Formats)
 	if err == nil && u.res.Items == 0 {
-		return u.res, errors.New("nothing readable found in that file")
+		return u.res, errNothingReadable
 	}
 	if err == nil && len(failed) > 0 {
 		err = errors.New("couldn't read: " + strings.Join(failed, ", "))

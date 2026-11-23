@@ -158,3 +158,10 @@ details.rule form { padding: 10px 0 4px; }
 .dropzone-clear { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 12px; }
 .dropzone-clear[hidden] { display: none; }
 .dropzone-folder { margin-top: 6px; padding: 4px 10px; font-size: 12px; }
+.job-running, .job-queued, .job-paused { color: var(--warn, #d69e2e); }
+.job-done { color: var(--ok); }
+.job-failed { color: var(--bad); }
+.job-stopped { color: var(--muted, #888); }
+.job-actions { white-space: nowrap; text-align: right; }
+.job-actions form { display: inline-block; margin-left: 4px; }
+.job-actions button { padding: 3px 8px; font-size: 12px; }

@@ -1,0 +1,8 @@
+{{define "content"}}
+<div class="head">
+  <h1>Jobs</h1>
+  <form method="post" action="/jobs/clear" onsubmit="return confirm('Remove all finished jobs from this list? Imported data stays.')"><button class="ghost">Clear finished</button></form>
+</div>
+<p class="muted small">Imports run one at a time and continue on their own after an update or restart. Stopping one keeps everything it already imported.</p>
+{{if .Jobs}}{{template "jobs" .Jobs}}{{else}}<section class="panel" id="jobs-panel"><p class="muted">No jobs yet.</p></section>{{end}}
+{{end}}

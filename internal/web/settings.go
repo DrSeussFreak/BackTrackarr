@@ -176,11 +176,11 @@ func (s *Server) requestRestart() bool {
 	if s.Restart == nil {
 		return false
 	}
-	waiting := s.eng.Jobs.AnyRunning()
+	waiting := s.eng.Jobs.BlocksRestart()
 	s.restartOnce.Do(func() {
 		go func() {
 			time.Sleep(400 * time.Millisecond) // let this response finish
-			for s.eng.Jobs.AnyRunning() {
+			for s.eng.Jobs.BlocksRestart() {   // imports continue after the restart
 				select {
 				case <-s.eng.Context().Done():
 					return

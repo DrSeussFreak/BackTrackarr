@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -302,29 +301,10 @@ func (s *Server) comicsImport(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, "/comics", "Upload failed: "+err.Error())
 		return
 	}
+	defer done()
 	// A big file outlives the browser request, so it runs as a job.
-	started := s.eng.Jobs.Start(s.eng.Context(), "CLZ import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
-		defer done()
-		var total core.ClzResult
-		err := eachUpload(files, report, func(f *os.File, name string) (string, error) {
-			if isJSONFile(name) {
-				return "", s.importJSON(ctx, f, name, report)
-			}
-			res, err := s.eng.ImportCLZProgress(ctx, f, "clz:"+name, report)
-			if res != nil {
-				total.Rows += res.Rows
-				total.New += res.New
-				total.Updated += res.Updated
-				total.Reads += res.Reads
-			}
-			return "", err
-		})
-		report(fmt.Sprintf("%d comics, %d new, %d updated, %d new reads", total.Rows, total.New, total.Updated, total.Reads))
-		return err
-	})
-	if !started {
-		done()
-		s.flash(w, r, "/comics", "That file is already importing.")
+	if err := s.eng.StartFileImport("CLZ import ← "+uploadLabel(files), files, core.FileImport{Mode: "comics"}); err != nil {
+		s.flash(w, r, "/comics", "Upload failed: "+err.Error())
 		return
 	}
 	back(w, r, "/comics")

@@ -4,11 +4,8 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -147,27 +144,10 @@ func (s *Server) streamingImport(w http.ResponseWriter, r *http.Request) {
 	if opt.Service == "auto" {
 		opt.Service = ""
 	}
-	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
-		defer done()
-		defer debug.FreeOSMemory()
-		return eachUpload(files, report, func(f *os.File, name string) (string, error) {
-			res, err := s.eng.ImportStreaming(ctx, f, opt, report)
-			if err != nil {
-				return "", err
-			}
-			msg := fmt.Sprintf("%s: %d rows, %d new plays, %d already there, %d skipped (trailers, previews, unreadable)",
-				res.Service, res.Rows, res.Added, res.Duplicates, res.Skipped)
-			if res.Unmatched > 0 {
-				msg += fmt.Sprintf(", %d without ids", res.Unmatched)
-			}
-			if len(res.Profiles) > 1 && opt.Profile == "" && opt.User == "" {
-				msg += fmt.Sprintf("; profiles were kept as users: %s", strings.Join(res.Profiles, ", "))
-			}
-			return msg, nil
-		})
-	})
-	if !started { // the same file is already importing
-		done()
+	defer done()
+	if err := s.eng.StartFileImport("import ← "+uploadLabel(files), files, core.FileImport{Mode: "streaming", Stream: opt}); err != nil {
+		s.flash(w, r, "/streaming", "Upload failed: "+err.Error())
+		return
 	}
 	back(w, r, "/streaming")
 }

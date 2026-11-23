@@ -28,6 +28,7 @@
     <a href="/setup" {{if eq .Nav "setup"}}class="on"{{end}}>Setup</a>
     <a href="/import" {{if eq .Nav "import"}}class="on"{{end}}>Import</a>
     <a href="/autodelete" {{if eq .Nav "autodelete"}}class="on"{{end}}>Auto-delete</a>
+    <a href="/jobs" {{if eq .Nav "jobs"}}class="on"{{end}}>Jobs</a>
     <a href="/settings" {{if eq .Nav "settings"}}class="on"{{end}}>Settings</a>
     <a href="/security" {{if eq .Nav "security"}}class="on"{{end}}>Security</a>
   </nav>
@@ -58,8 +59,17 @@
 <section class="panel" id="jobs-panel">
   <h2>Jobs</h2>
   <table>
-    {{range .}}<tr><td><b>{{.Name}}</b></td><td>{{if .Running}}<span class="warn">running</span>{{else if .Err}}<span class="bad">failed</span>{{else}}<span class="ok">done</span>{{end}}</td>
-    <td>{{.Message}}{{if .Err}}<div class="bad small">{{.Err}}</div>{{end}}</td><td class="mono small">{{.Updated.Format "15:04:05"}}</td></tr>{{end}}
+    {{range .}}<tr><td><b>{{.Name}}</b></td>
+    <td><span class="job-{{.State}}">{{if .Stopping}}stopping{{else}}{{.State}}{{end}}</span></td>
+    <td>{{.Message}}{{if .Total}}{{if gt .Total 1}}<div class="muted small">{{num .Done}} of {{num .Total}} files</div>{{end}}{{end}}{{if .Err}}<div class="bad small">{{.Err}}</div>{{end}}</td>
+    <td class="mono small">{{.Updated.Format "15:04:05"}}</td>
+    <td class="job-actions">
+      {{if .CanPause}}<form method="post" action="/jobs/{{.ID}}/pause"><button class="ghost">Pause</button></form>{{end}}
+      {{if .CanResume}}<form method="post" action="/jobs/{{.ID}}/resume"><button class="ghost">Resume</button></form>{{end}}
+      {{if .CanRetry}}<form method="post" action="/jobs/{{.ID}}/retry"><button class="ghost">Retry</button></form>{{end}}
+      {{if .CanStop}}<form method="post" action="/jobs/{{.ID}}/stop" onsubmit="return confirm('Stop this job? What it already imported stays.')"><button class="ghost">Stop</button></form>{{end}}
+      {{if .CanRemove}}<form method="post" action="/jobs/{{.ID}}/remove"><button class="ghost">Remove</button></form>{{end}}
+    </td></tr>{{end}}
   </table>
 </section>
 {{end}}

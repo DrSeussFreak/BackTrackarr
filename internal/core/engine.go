@@ -39,8 +39,10 @@ type Engine struct {
 }
 
 func New(ctx context.Context, cfg *config.Config, st *store.Store, px *plex.Client, all []sinks.Sink, log *slog.Logger) *Engine {
-	return &Engine{ctx: ctx, cfg: cfg, st: st, plex: px, sinks: all, log: log, wake: make(chan struct{}, 1), Jobs: NewJobs(),
-		sections: map[string]string{}}
+	e := &Engine{ctx: ctx, cfg: cfg, st: st, plex: px, sinks: all, log: log, wake: make(chan struct{}, 1),
+		Jobs: NewJobs(ctx, st, cfg.DataDir, log), sections: map[string]string{}}
+	e.registerJobRunners()
+	return e
 }
 
 func (e *Engine) Sinks() []sinks.Sink { return e.sinks }

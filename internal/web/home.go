@@ -98,6 +98,9 @@ func (s *Server) homeReset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) importEverything(w http.ResponseWriter, r *http.Request) {
-	s.eng.Jobs.Start(s.eng.Context(), "import ← everything connected", s.eng.ImportEverything)
+	if _, err := s.eng.StartImportEverything(); err != nil {
+		s.flash(w, r, "/import", "Couldn't start the import: "+err.Error())
+		return
+	}
 	back(w, r, "/import")
 }

@@ -3,11 +3,8 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
-	"os"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -91,36 +88,13 @@ func (s *Server) shelfImport(w http.ResponseWriter, r *http.Request, covers stri
 		s.flash(w, r, to, "Upload failed: "+err.Error())
 		return
 	}
-	mediaType := shelfType(covers, r.FormValue("type"))
-	started := s.eng.Jobs.Start(s.eng.Context(), covers+" import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
-		defer done()
-		defer debug.FreeOSMemory()
-		rows, added, updated, events := 0, 0, 0, 0
-		err := eachUpload(files, report, func(f *os.File, name string) (string, error) {
-			var res *core.ShelfImportResult
-			var err error
-			switch {
-			case covers == "games":
-				res, err = s.eng.ImportGames(ctx, f)
-			case isJSONFile(name):
-				return "", s.importJSON(ctx, f, name, report)
-			default:
-				res, err = s.eng.ImportBooks(ctx, f, mediaType)
-			}
-			if res != nil {
-				rows += res.Rows
-				added += res.New
-				updated += res.Updated
-				events += res.Events
-			}
-			return "", err
-		})
-		report(fmt.Sprintf("%d rows, %d new, %d updated, %d new reads or plays", rows, added, updated, events))
-		return err
-	})
-	if !started {
-		done()
-		s.flash(w, r, to, "That file is already importing.")
+	defer done()
+	p := core.FileImport{Mode: "books", MediaType: shelfType(covers, r.FormValue("type"))}
+	if covers == "games" {
+		p = core.FileImport{Mode: "games"}
+	}
+	if err := s.eng.StartFileImport(covers+" import ← "+uploadLabel(files), files, p); err != nil {
+		s.flash(w, r, to, "Upload failed: "+err.Error())
 		return
 	}
 	back(w, r, to)

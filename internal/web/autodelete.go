@@ -37,9 +37,10 @@ func (s *Server) apiNowPlaying(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) importSource(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	s.eng.Jobs.Start(s.eng.Context(), "import ← "+name, func(ctx context.Context, report func(string)) error {
-		return s.eng.PullHistory(ctx, name, report)
-	})
+	if _, err := s.eng.StartSourceImport(name); err != nil {
+		s.flash(w, r, "/import", "Couldn't start the import: "+err.Error())
+		return
+	}
 	back(w, r, "/import")
 }
 
