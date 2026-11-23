@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type Comic struct {
 	Barcode     string            `json:"barcode,omitempty"`
 	Format      string            `json:"format,omitempty"`
 	Read        bool              `json:"read"`
+	ReadKnown   bool              `json:"-"` // Read is authoritative for this import
 	Rating      float64           `json:"rating,omitempty"`
 	Raw         map[string]string `json:"raw"`
 	Reads       int64             `json:"reads"`
@@ -56,13 +58,38 @@ func (s *Store) UpsertComic(ctx context.Context, c *Comic) (bool, error) {
 		 issue=COALESCE(excluded.issue, comics.issue), variant=COALESCE(excluded.variant, comics.variant),
 		 title=COALESCE(excluded.title, comics.title), publisher=COALESCE(excluded.publisher, comics.publisher),
 		 release_date=COALESCE(excluded.release_date, comics.release_date), cover_date=COALESCE(excluded.cover_date, comics.cover_date),
-		 barcode=COALESCE(excluded.barcode, comics.barcode), format=COALESCE(excluded.format, comics.format), is_read=MAX(comics.is_read, excluded.is_read),
+		 barcode=COALESCE(excluded.barcode, comics.barcode), format=COALESCE(excluded.format, comics.format), is_read=CASE WHEN ? THEN excluded.is_read ELSE MAX(comics.is_read, excluded.is_read) END,
 		 rating=COALESCE(excluded.rating, comics.rating), raw=excluded.raw, imported_at=excluded.imported_at
 		RETURNING id`,
 		c.ExtKey, ns(c.Series), ns(c.Issue), ns(c.Variant), ns(c.Title), ns(c.Publisher), ns(c.ReleaseDate), ns(c.CoverDate),
-		ns(c.Barcode), ns(c.Format), c.Read, nf(c.Rating), string(raw), time.Now().Unix()).Scan(&id)
+		ns(c.Barcode), ns(c.Format), c.Read, nf(c.Rating), string(raw), time.Now().Unix(), c.ReadKnown).Scan(&id)
 	c.ID = id
 	return isNew, err
+}
+
+// ComicCopyKey gives each owned copy its own key. CLZ can list several copies
+// under one catalog id: the row already stored under that id keeps it, and any
+// other copy is keyed by its own id, so importing again finds the same rows.
+func (s *Store) ComicCopyKey(ctx context.Context, base, copyID string) (string, error) {
+	var stored string
+	err := s.q(ctx).QueryRowContext(ctx, `SELECT raw FROM comics WHERE ext_key=?`, base).Scan(&stored)
+	if errors.Is(err, sql.ErrNoRows) {
+		return base, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var raw map[string]string
+	_ = json.Unmarshal([]byte(stored), &raw)
+	for k, v := range raw {
+		if n := strings.ToLower(k); n == "id" || n == "itemid" {
+			if v == copyID {
+				return base, nil
+			}
+			return base + "#" + copyID, nil
+		}
+	}
+	return base, nil // stored before copy ids were kept
 }
 
 // AddComicRead records one read. Rereads (a new read date on a later import)

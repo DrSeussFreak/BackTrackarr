@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/DrSeussFreak/BackTrackarr/internal/config"
+	"github.com/DrSeussFreak/BackTrackarr/internal/store"
 )
 
 func TestImportCLZXML(t *testing.T) {
@@ -69,5 +70,53 @@ func TestLargeCLZXMLSavesEveryBatch(t *testing.T) {
 	var n int
 	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM comics`).Scan(&n); err != nil || n != total {
 		t.Fatalf("%d comics stored, err %v", n, err)
+	}
+}
+
+// CLZ can list several owned copies under one catalog id (bpcomicid).
+func TestCLZKeepsEachCopy(t *testing.T) {
+	e, st := shelfEngine(t, config.ShelfConfig{User: "me"})
+	ctx := context.Background()
+	row := func(id, read string) string {
+		return `<comic><id>` + id + `</id><bpcomicid>500</bpcomicid><mainsection><series><displayname>Saga</displayname></series></mainsection><issue>1</issue><readit boolvalue="1">` + read + `</readit></comic>`
+	}
+	doc := `<comicinfo><comiclist>` + row("1", "Yes") + row("2", "No") + row("3", "No") + `</comiclist></comicinfo>`
+	count := func(q string) int { return shelfCount(t, st, q) }
+	for pass := 0; pass < 2; pass++ {
+		res, err := e.ImportCLZ(ctx, strings.NewReader(doc), "clz:test.xml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Rows != 3 || count(`SELECT COUNT(*) FROM comics`) != 3 {
+			t.Fatalf("pass %d: %+v, %d comics", pass, res, count(`SELECT COUNT(*) FROM comics`))
+		}
+		if n := count(`SELECT COUNT(*) FROM comics WHERE is_read=1`); n != 1 {
+			t.Fatalf("pass %d: %d read, want only the copy marked read", pass, n)
+		}
+	}
+}
+
+// An earlier version merged copies into one row. Importing again must split
+// them without duplicating it or leaving a wrong read mark.
+func TestCLZSplitsCopiesMergedEarlier(t *testing.T) {
+	e, st := shelfEngine(t, config.ShelfConfig{User: "me"})
+	ctx := context.Background()
+	if _, err := st.UpsertComic(ctx, &store.Comic{ExtKey: "clz:500", Series: "Saga", Issue: "1", Read: true, Raw: map[string]string{"id": "2", "bpcomicid": "500"}}); err != nil {
+		t.Fatal(err)
+	}
+	doc := `<comicinfo><comiclist>
+	<comic><id>1</id><bpcomicid>500</bpcomicid><series>Saga</series><issue>1</issue><readit>Yes</readit></comic>
+	<comic><id>2</id><bpcomicid>500</bpcomicid><series>Saga</series><issue>1</issue><readit>No</readit></comic>
+	</comiclist></comicinfo>`
+	for pass := 0; pass < 2; pass++ {
+		if _, err := e.ImportCLZ(ctx, strings.NewReader(doc), "clz:test.xml"); err != nil {
+			t.Fatal(err)
+		}
+		if n := shelfCount(t, st, `SELECT COUNT(*) FROM comics`); n != 2 {
+			t.Fatalf("pass %d: %d comics", pass, n)
+		}
+		if n := shelfCount(t, st, `SELECT COUNT(*) FROM comics WHERE is_read=1`); n != 1 {
+			t.Fatalf("pass %d: %d read", pass, n)
+		}
 	}
 }

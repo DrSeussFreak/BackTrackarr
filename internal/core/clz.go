@@ -25,6 +25,7 @@ import (
 
 var clzColumns = map[string][]string{
 	"key":       {"comicid", "coreid", "clzcomicid", "bpcomicid", "id", "itemid"},
+	"copy":      {"id", "itemid"}, // one owned copy; the key above can be a catalog id
 	"series":    {"series", "seriesname", "seriestitle"},
 	"issue":     {"issue", "issuenr", "issueno", "issuenumber", "nr", "number"},
 	"variant":   {"variant", "variantdescription", "edition"},
@@ -238,10 +239,19 @@ func (e *Engine) clzStore(ctx context.Context, get func(string) string, raw map[
 		h := sha1.Sum([]byte(strings.ToLower(strings.Join([]string{c.Series, c.Issue, c.Variant, c.Barcode, c.Title}, "|"))))
 		c.ExtKey = "h:" + hex.EncodeToString(h[:10])
 	} else {
-		c.ExtKey = "clz:" + c.ExtKey
+		base := c.ExtKey
+		c.ExtKey = "clz:" + base
+		if id := get("copy"); id != "" && id != base {
+			key, err := e.st.ComicCopyKey(ctx, c.ExtKey, id)
+			if err != nil {
+				return err
+			}
+			c.ExtKey = key
+		}
 	}
 	readAt, hasDate := clzDate(get("readdate"))
 	c.Read = truthy(get("read")) || hasDate
+	c.ReadKnown = get("read") != "" // the export says either way, so it can also clear a wrong value
 	if v, err := strconv.ParseFloat(strings.TrimSpace(strings.Split(get("rating"), "/")[0]), 64); err == nil {
 		c.Rating = v
 	}

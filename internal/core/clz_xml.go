@@ -221,7 +221,7 @@ func (e *Engine) importCLZXML(ctx context.Context, r io.Reader, source string, r
 		// Worked out now, so no matching happens while the write lock is held.
 		vals := make(map[string]string, len(clzColumns))
 		for f, names := range clzColumns {
-			vals[f] = clzPick(paths, flat, names, f == "key")
+			vals[f] = clzPick(paths, flat, names, f == "key" || f == "copy")
 		}
 		if vals["series"] == "" && vals["title"] == "" {
 			return nil, 0, nil
