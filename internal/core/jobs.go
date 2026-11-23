@@ -358,24 +358,29 @@ func (j *Jobs) runDurable(ctx context.Context, x *job) {
 	if errors.Is(cause, errJobStop) || (err == nil && !shuttingDown && !errors.Is(cause, errJobPause)) {
 		os.RemoveAll(j.jobDir(x.ID))
 	}
+	// Saved before it shows, so a state on screen is always the state on disk.
 	j.mu.Lock()
-	x.Stopping, x.cancel = false, nil
-	x.Updated = time.Now()
+	y := *x
+	y.Stopping, y.cancel = false, nil
+	y.Updated = time.Now()
 	switch {
 	case errors.Is(cause, errJobPause):
-		x.State, x.Running, x.Message = JobPaused, false, pausedMessage(x)
+		y.State, y.Running, y.Message = JobPaused, false, pausedMessage(&y)
 	case errors.Is(cause, errJobStop):
-		x.State, x.Running, x.Message = JobStopped, false, "stopped"
+		y.State, y.Running, y.Message = JobStopped, false, "stopped"
 	case shuttingDown:
 		// Shutting down. It stays in the queue for the next start.
-		x.State, x.Message = JobQueued, "continues after the restart"
+		y.State, y.Message = JobQueued, "continues after the restart"
 	case err != nil:
-		x.State, x.Running, x.Err = JobFailed, false, err.Error()
+		y.State, y.Running, y.Err = JobFailed, false, err.Error()
 	default:
-		x.State, x.Running = JobDone, false
+		y.State, y.Running = JobDone, false
 	}
 	j.mu.Unlock()
-	_ = j.save(x)
+	_ = j.save(&y)
+	j.mu.Lock()
+	x.JobStatus, x.cancel = y.JobStatus, nil
+	j.mu.Unlock()
 	j.prune()
 }
 

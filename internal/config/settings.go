@@ -329,8 +329,8 @@ func buildSettings() {
 					settingsList = append(settingsList, Setting{Key: p + "_ADULT", Label: title + " is adult", Group: k.group,
 						Type: "bool", Default: "false", Instance: k.prefix, Number: n})
 				}
-				inst("ROOT_FOLDER", "root folder", "text", "Blank uses its first root folder.")
-				inst("QUALITY_PROFILE", "quality profile", "text", "Name or id. Blank uses its first profile.")
+				inst("ROOT_FOLDER", "root folder", "text", "Filled in from the app once its address and API key are set. Blank uses the first.")
+				inst("QUALITY_PROFILE", "quality profile", "text", "Filled in from the app once its address and API key are set. Blank uses the first.")
 			}
 		}
 	}

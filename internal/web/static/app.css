@@ -165,3 +165,10 @@ details.rule form { padding: 10px 0 4px; }
 .job-actions { white-space: nowrap; text-align: right; }
 .job-actions form { display: inline-block; margin-left: 4px; }
 .job-actions button { padding: 3px 8px; font-size: 12px; }
+.settings-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 4px; }
+.level-filter { margin: 0; padding: 3px 10px; font-size: 12px; font-weight: 500; line-height: 1.5; background: transparent; color: var(--muted); border: 1px solid currentColor; border-radius: 6px; cursor: pointer; }
+.level-filter.Essential { color: var(--accent); } .level-filter.Recommended { color: var(--ok); }
+.level-filter:hover { background: var(--bg); }
+.level-filter.on, .level-filter.on:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.arr-status { margin-top: 4px; }
+tr[data-level][hidden], details.panel[hidden] { display: none; }

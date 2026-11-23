@@ -45,14 +45,23 @@
   </section>
 </div>
 
-<p class="small"><b>Only need the basics?</b> Fill in what's marked <span class="level Essential">Essential</span>. Anything <span class="level Optional">Optional</span> or <span class="level Advanced">Advanced</span> can be skipped unless you use what it says it's for.</p>
-<form method="post" action="/settings" autocomplete="off" novalidate>
+<div class="settings-filter small" role="group" aria-label="Filter settings">
+  <b>Show:</b>
+  <button type="button" class="level-filter" data-filter="all">All</button>
+  <button type="button" class="level-filter level Essential" data-filter="Essential">Essential</button>
+  <button type="button" class="level-filter level Recommended" data-filter="Recommended">Recommended</button>
+  <button type="button" class="level-filter level Optional" data-filter="Optional">Optional</button>
+  <button type="button" class="level-filter level Advanced" data-filter="Advanced">Advanced</button>
+  <span class="muted" id="settings-filter-note" role="status"></span>
+</div>
+<p class="muted small">Only need the basics? Click <b>Essential</b> and fill in what's there. Hidden settings keep their values when you save.</p>
+<form method="post" action="/settings" autocomplete="off" novalidate id="settings-form">
   {{range .Groups}}
   <details class="panel" {{if eq .Name "General"}}open{{end}}>
     <summary><b>{{.Name}}</b>{{with .Help}}<span class="muted small">{{.}}</span>{{end}}</summary>
     <table>
       {{range .Rows}}
-      <tr>
+      <tr data-level="{{.Info.Level}}">
         <td><label for="{{.Key}}"><b>{{.Label}}</b></label>{{with .Info.Level}}<span class="level {{.}}">{{.}}</span>{{end}}
           <div class="needed">{{.Info.What}}</div>
           <div class="muted small"><b>Needed for:</b> {{.Info.Needed}}</div>{{if .Help}}<div class="muted small">{{.Help}}</div>{{end}}<div class="muted small mono">{{.Key}}</div></td>
@@ -82,4 +91,5 @@
   <p><button>Save and apply</button></p>
 </form>
 <p class="muted small">Only recovery switches stay outside the app. If a saved value locks you out, start once with <code>SETTINGS_IGNORE=true</code> and <code>ADMIN_PASSWORD</code> set. If you lose your authenticator, use <code>AUTH_RESET=true</code>.</p>
+<script src="{{asset "settings.js"}}" defer></script>
 {{end}}
