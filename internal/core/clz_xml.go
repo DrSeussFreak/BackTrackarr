@@ -176,7 +176,7 @@ func clzDate(s string) (time.Time, bool) {
 	return parseDate(s)
 }
 
-func (e *Engine) importCLZXML(ctx context.Context, r io.Reader, source string) (*ClzResult, error) {
+func (e *Engine) importCLZXML(ctx context.Context, r io.Reader, source string, report func(string)) (*ClzResult, error) {
 	dec := xml.NewDecoder(r)
 	dec.Strict = false
 	dec.CharsetReader = xmlCharset
@@ -192,51 +192,44 @@ func (e *Engine) importCLZXML(ctx context.Context, r io.Reader, source string) (
 			}
 		}
 	}
-	for done := false; !done; {
-		if err := e.st.InTx(ctx, func(ctx context.Context) error {
-			for n := 0; n < 500; n++ {
-				flat, err := next()
-				if err == io.EOF {
-					done = true
-					return nil
-				}
-				if err != nil {
-					return fmt.Errorf("comic %d: %w", res.Rows+1, err)
-				}
-				if len(flat) == 0 {
-					continue
-				}
-				paths := make([]string, 0, len(flat))
-				for p := range flat {
-					paths = append(paths, p)
-				}
-				sort.Slice(paths, func(a, b int) bool {
-					da, db := strings.Count(paths[a], "."), strings.Count(paths[b], ".")
-					if da != db {
-						return da < db
-					}
-					return paths[a] < paths[b]
-				})
-				vals := map[string]string{}
-				get := func(f string) string {
-					v, ok := vals[f]
-					if !ok {
-						v = clzPick(paths, flat, clzColumns[f], f == "key")
-						vals[f] = v
-					}
-					return v
-				}
-				if get("series") == "" && get("title") == "" {
-					continue
-				}
-				if err := e.clzStore(ctx, get, flat, source, res); err != nil {
-					return err
-				}
-			}
-			return nil
-		}); err != nil {
-			return res, err
+	seen := 0
+	err := e.clzBatches(ctx, func() (*clzRow, int, error) {
+		flat, err := next()
+		if err == io.EOF {
+			return nil, 0, io.EOF
 		}
+		seen++
+		if err != nil {
+			return nil, 0, fmt.Errorf("comic %d: %w", seen, err)
+		}
+		if len(flat) == 0 {
+			return nil, 0, nil
+		}
+		size := 0
+		paths := make([]string, 0, len(flat))
+		for p, v := range flat {
+			paths = append(paths, p)
+			size += len(p) + len(v)
+		}
+		sort.Slice(paths, func(a, b int) bool {
+			da, db := strings.Count(paths[a], "."), strings.Count(paths[b], ".")
+			if da != db {
+				return da < db
+			}
+			return paths[a] < paths[b]
+		})
+		// Worked out now, so no matching happens while the write lock is held.
+		vals := make(map[string]string, len(clzColumns))
+		for f, names := range clzColumns {
+			vals[f] = clzPick(paths, flat, names, f == "key")
+		}
+		if vals["series"] == "" && vals["title"] == "" {
+			return nil, 0, nil
+		}
+		return &clzRow{get: func(f string) string { return vals[f] }, raw: flat}, size, nil
+	}, source, res, report)
+	if err != nil {
+		return res, err
 	}
 	if res.Rows == 0 {
 		return res, errors.New("no comics found in this XML file")

@@ -3,6 +3,10 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"time"
+
+	"modernc.org/sqlite"
 )
 
 // querier is what *sql.DB and *sql.Tx have in common.
@@ -29,7 +33,7 @@ func (s *Store) InTx(ctx context.Context, fn func(ctx context.Context) error) er
 	if _, nested := ctx.Value(txKey{}).(*sql.Tx); nested {
 		return fn(ctx)
 	}
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -38,4 +42,29 @@ func (s *Store) InTx(ctx context.Context, fn func(ctx context.Context) error) er
 		return err
 	}
 	return tx.Commit()
+}
+
+// How long a transaction keeps waiting for its turn to write.
+const beginWait = 2 * time.Minute
+
+// begin takes the write lock, waiting through another writer. Nothing has run
+// yet when this fails, so trying again is always safe.
+func (s *Store) begin(ctx context.Context) (*sql.Tx, error) {
+	deadline := time.Now().Add(beginWait)
+	for {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err == nil || !isBusy(err) || time.Now().After(deadline) {
+			return tx, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
+func isBusy(err error) bool {
+	var se *sqlite.Error
+	return errors.As(err, &se) && se.Code()&0xff == 5 // SQLITE_BUSY and its variants
 }

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -48,5 +49,25 @@ func TestImportCLZXML(t *testing.T) {
 	u, err := e.ImportAnything(ctx, p, "clz.xml", "", nil)
 	if err != nil || u.Comics != 2 {
 		t.Fatalf("universal import: %+v %v", u, err)
+	}
+}
+
+func TestLargeCLZXMLSavesEveryBatch(t *testing.T) {
+	e, st, _ := nowPlayingEngine(t)
+	var b strings.Builder
+	b.WriteString("<comicinfo><comiclist>")
+	const total = clzBatchRows*2 + 37
+	for i := 0; i < total; i++ {
+		fmt.Fprintf(&b, "<comic><id>%d</id><mainsection><series><displayname>Big Series</displayname></series></mainsection><issuenr>%d</issuenr></comic>", i+1, i+1)
+	}
+	b.WriteString("</comiclist></comicinfo>")
+	var msgs []string
+	res, err := e.ImportCLZProgress(context.Background(), strings.NewReader(b.String()), "clz:big.xml", func(m string) { msgs = append(msgs, m) })
+	if err != nil || res.Rows != total || res.New != total || len(msgs) != 3 {
+		t.Fatalf("res %+v err %v progress %v", res, err, msgs)
+	}
+	var n int
+	if err := st.DB.QueryRow(`SELECT COUNT(*) FROM comics`).Scan(&n); err != nil || n != total {
+		t.Fatalf("%d comics stored, err %v", n, err)
 	}
 }

@@ -99,6 +99,11 @@ type ClzResult struct {
 // matched by their CLZ id (or series/issue/variant/barcode), and a new read
 // date is added as another read, so rereads are kept.
 func (e *Engine) ImportCLZ(ctx context.Context, r io.Reader, source string) (*ClzResult, error) {
+	return e.ImportCLZProgress(ctx, r, source, func(string) {})
+}
+
+// ImportCLZProgress is ImportCLZ with progress messages for a background job.
+func (e *Engine) ImportCLZProgress(ctx context.Context, r io.Reader, source string, report func(string)) (*ClzResult, error) {
 	br := bufio.NewReader(r)
 	head, _ := br.Peek(4096)
 	head = bytes.TrimPrefix(head, []byte("\xef\xbb\xbf"))
@@ -106,7 +111,7 @@ func (e *Engine) ImportCLZ(ctx context.Context, r io.Reader, source string) (*Cl
 		br.Discard(3)
 	}
 	if bytes.HasPrefix(bytes.TrimSpace(head), []byte("<")) {
-		return e.importCLZXML(ctx, br, source)
+		return e.importCLZXML(ctx, br, source, report)
 	}
 	cr := csv.NewReader(br)
 	cr.Comma = detectComma(head)
@@ -136,42 +141,90 @@ func (e *Engine) ImportCLZ(ctx context.Context, r io.Reader, source string) (*Cl
 		}
 	}
 	res := &ClzResult{}
-	for done := false; !done; {
-		if err := e.st.InTx(ctx, func(ctx context.Context) error {
-			for n := 0; n < 500; n++ {
-				rec, err := cr.Read()
-				if err == io.EOF {
-					done = true
-					return nil
-				}
-				if err != nil {
-					return fmt.Errorf("row %d: %w", res.Rows+2, err)
-				}
-				get := func(f string) string {
-					if i, ok := col[f]; ok && i < len(rec) {
-						return strings.TrimSpace(rec[i])
-					}
-					return ""
-				}
-				raw := map[string]string{}
-				for i, h := range header {
-					if i < len(rec) && strings.TrimSpace(rec[i]) != "" {
-						raw[strings.TrimSpace(h)] = rec[i]
-					}
-				}
-				if len(raw) == 0 {
-					continue
-				}
-				if err := e.clzStore(ctx, get, raw, source, res); err != nil {
-					return err
-				}
+	line := 1
+	err = e.clzBatches(ctx, func() (*clzRow, int, error) {
+		rec, err := cr.Read()
+		if err == io.EOF {
+			return nil, 0, io.EOF
+		}
+		line++
+		if err != nil {
+			return nil, 0, fmt.Errorf("row %d: %w", line, err)
+		}
+		raw := map[string]string{}
+		size := 0
+		for i, h := range header {
+			if i < len(rec) && strings.TrimSpace(rec[i]) != "" {
+				raw[strings.TrimSpace(h)] = rec[i]
+				size += len(h) + len(rec[i])
 			}
+		}
+		if len(raw) == 0 {
+			return nil, 0, nil
+		}
+		get := func(f string) string {
+			if i, ok := col[f]; ok && i < len(rec) {
+				return strings.TrimSpace(rec[i])
+			}
+			return ""
+		}
+		return &clzRow{get: get, raw: raw}, size, nil
+	}, source, res, report)
+	return res, err
+}
+
+const (
+	clzBatchRows  = 100
+	clzBatchBytes = 4 << 20
+)
+
+// clzRow is one parsed comic waiting to be saved.
+type clzRow struct {
+	get func(string) string
+	raw map[string]string
+}
+
+// clzBatches parses a small batch with no lock held, then saves it in one
+// short transaction, so a large file never blocks other writers for long.
+// If the file breaks partway, comics before that point are kept.
+func (e *Engine) clzBatches(ctx context.Context, next func() (*clzRow, int, error), source string, res *ClzResult, report func(string)) error {
+	for {
+		batch := make([]*clzRow, 0, clzBatchRows)
+		size := 0
+		var readErr error
+		for len(batch) < clzBatchRows && size < clzBatchBytes {
+			row, n, err := next()
+			if err != nil {
+				readErr = err
+				break
+			}
+			if row != nil {
+				batch = append(batch, row)
+				size += n
+			}
+		}
+		if len(batch) > 0 {
+			if err := e.st.InTx(ctx, func(ctx context.Context) error {
+				saved := *res
+				for _, row := range batch {
+					if err := e.clzStore(ctx, row.get, row.raw, source, res); err != nil {
+						*res = saved // rolled back, so don't count it
+						return err
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			report(fmt.Sprintf("%d comics saved", res.Rows))
+		}
+		if readErr == io.EOF {
 			return nil
-		}); err != nil {
-			return res, err
+		}
+		if readErr != nil {
+			return readErr
 		}
 	}
-	return res, nil
 }
 
 // clzStore saves one comic from either a CSV row or an XML record.

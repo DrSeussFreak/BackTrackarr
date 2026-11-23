@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -285,13 +287,14 @@ func (s *Server) comicsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, "comics", M{"Title": "Comics", "Nav": "comics", "Comics": comics, "Stats": st, "Q": cq,
-		"Next": offset + 100, "HasMore": len(comics) == 100, "Dir": s.cfg.ClzImportDir, "Flash": takeFlash(w, r)})
+		"Next": offset + 100, "HasMore": len(comics) == 100, "Dir": s.cfg.ClzImportDir,
+		"Jobs": s.eng.Jobs.List(), "Refresh": s.eng.Jobs.AnyRunning(), "Flash": takeFlash(w, r)})
 }
 
 func (s *Server) comicsImport(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 256<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<30)
 	if err := r.ParseMultipartForm(1 << 20); err != nil { // the rest goes to a temp file
-		s.flash(w, r, "/comics", "Upload failed. Choose a CLZ file under 256 MB.")
+		s.flash(w, r, "/comics", "Upload failed. Choose a CLZ file under 2 GB.")
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
@@ -301,12 +304,39 @@ func (s *Server) comicsImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
-	res, err := s.eng.ImportCLZ(r.Context(), f, "clz:"+hdr.Filename)
+	spool, err := os.CreateTemp("", "backtrackarr-clz-*")
 	if err != nil {
-		s.flash(w, r, "/comics", "Import failed: "+err.Error())
+		s.fail(w, err)
 		return
 	}
-	s.flash(w, r, "/comics", fmt.Sprintf("Imported %s: %d rows, %d new, %d updated, %d new reads.", hdr.Filename, res.Rows, res.New, res.Updated, res.Reads))
+	_, err = io.Copy(spool, f)
+	spool.Close()
+	if err != nil {
+		os.Remove(spool.Name())
+		s.flash(w, r, "/comics", "Upload failed: "+err.Error())
+		return
+	}
+	// A big file outlives the browser request, so it runs as a job.
+	name, p := hdr.Filename, spool.Name()
+	started := s.eng.Jobs.Start(s.eng.Context(), "CLZ import ← "+name, func(ctx context.Context, report func(string)) error {
+		defer os.Remove(p)
+		in, err := os.Open(p)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		res, err := s.eng.ImportCLZProgress(ctx, in, "clz:"+name, report)
+		if res != nil {
+			report(fmt.Sprintf("%d comics, %d new, %d updated, %d new reads", res.Rows, res.New, res.Updated, res.Reads))
+		}
+		return err
+	})
+	if !started {
+		os.Remove(p)
+		s.flash(w, r, "/comics", "That file is already importing.")
+		return
+	}
+	back(w, r, "/comics")
 }
 
 func (s *Server) apiComicsExport(w http.ResponseWriter, r *http.Request) {
