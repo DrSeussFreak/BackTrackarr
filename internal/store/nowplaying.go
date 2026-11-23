@@ -59,11 +59,25 @@ func (s *Store) EndSession(ctx context.Context, key string) error {
 	return err
 }
 
+// HideSession takes a row off Now Playing at the user's request. Playback on
+// the source is not touched: the row keeps tracking it, so a finished play
+// still counts, and it clears when that playback ends. It reports whether a
+// showing session was found.
+func (s *Store) HideSession(ctx context.Context, key string) (bool, error) {
+	res, err := s.DB.ExecContext(ctx, `UPDATE sessions SET state=? WHERE key=? AND state IN (?,?,?)`,
+		model.ActHidden, key, model.ActStart, model.ActPause, model.ActWatched)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 // EndOtherPlexSessions clears anything else showing for this user on this
 // player: a player can only play one thing at a time.
 func (s *Store) EndOtherPlexSessions(ctx context.Context, user, player, keep string) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE sessions SET state=? WHERE user=? AND player=? AND key<>? AND source LIKE 'plex%' AND state IN (?,?,?)`,
-		model.ActStop, user, player, keep, model.ActStart, model.ActPause, model.ActWatched)
+	_, err := s.DB.ExecContext(ctx, `UPDATE sessions SET state=? WHERE user=? AND player=? AND key<>? AND source LIKE 'plex%' AND state IN (?,?,?,?)`,
+		model.ActStop, user, player, keep, model.ActStart, model.ActPause, model.ActWatched, model.ActHidden)
 	return err
 }
 

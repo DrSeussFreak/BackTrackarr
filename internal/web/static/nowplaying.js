@@ -14,6 +14,15 @@
     state.className = "tag " + (p.state === "pause" ? "" : "ok");
     state.textContent = p.state === "pause" ? "paused" : "playing";
     top.append(state, title);
+    const head = document.createElement("div");
+    head.className = "np-head";
+    const end = document.createElement("button");
+    end.type = "button";
+    end.className = "ghost np-end";
+    end.textContent = "End session";
+    end.setAttribute("aria-label", "End session: " + p.display);
+    end.addEventListener("click", () => endSession(p, end));
+    head.append(top, end);
     const meta = document.createElement("div");
     meta.className = "muted small";
     meta.textContent = [p.user, p.player || p.source].filter(Boolean).join(" · ");
@@ -31,8 +40,26 @@
     const note = document.createElement("div");
     note.className = "muted small";
     note.textContent = p.counted ? "Counted" : "Counts at " + at + "%";
-    el.append(top, meta, bar, note);
+    el.append(head, meta, bar, note);
     return el;
+  }
+
+  async function endSession(p, button) {
+    if (!confirm("Remove " + p.display + " from Now playing?\n\nThis doesn't stop playback in Plex.")) return;
+    button.disabled = true;
+    button.textContent = "Ending…";
+    try {
+      const res = await fetch("/api/now-playing/end", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ key: p.key }),
+      });
+      if (!res.ok && res.status !== 404) throw new Error();
+      await refresh();
+    } catch {
+      button.disabled = false;
+      button.textContent = "Couldn't end. Try again";
+    }
   }
 
   async function refresh() {

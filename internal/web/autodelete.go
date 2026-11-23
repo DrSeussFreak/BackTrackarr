@@ -19,6 +19,7 @@ func (s *Server) routesAutoDelete(admin *http.ServeMux) {
 	admin.HandleFunc("POST /autodelete/settings", s.autoDeleteSettings)
 	admin.HandleFunc("POST /autodelete/run", s.autoDeleteRun)
 	admin.HandleFunc("GET /api/now-playing", s.apiNowPlaying)
+	admin.HandleFunc("POST /api/now-playing/end", s.apiEndSession)
 	admin.HandleFunc("POST /import/source/{name}", s.importSource)
 }
 
@@ -33,6 +34,21 @@ func (s *Server) apiNowPlaying(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, M{"items": rows})
+}
+
+// apiEndSession removes a session from Now Playing. It never calls Plex, so
+// playback itself carries on.
+func (s *Server) apiEndSession(w http.ResponseWriter, r *http.Request) {
+	found, err := s.st.HideSession(r.Context(), r.FormValue("key"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if !found {
+		jsonError(w, http.StatusNotFound, "That session has already ended.")
+		return
+	}
+	writeJSON(w, M{"ok": true})
 }
 
 func (s *Server) importSource(w http.ResponseWriter, r *http.Request) {

@@ -23,7 +23,10 @@ const (
 	ActPause   = "pause"
 	ActStop    = "stop"
 	ActWatched = "watched"
-	ActRate    = "rate"
+	// ActHidden is a session state only: the user ended it on Now Playing while
+	// the source may still be playing it.
+	ActHidden = "hidden"
+	ActRate   = "rate"
 )
 
 type IDs struct {

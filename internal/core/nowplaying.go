@@ -64,7 +64,7 @@ func (e *Engine) SyncNowPlaying(ctx context.Context) error {
 	}
 	active := false
 	for _, r := range rows {
-		active = active || r.Active()
+		active = active || r.Active() || r.State == model.ActHidden
 	}
 	if !active {
 		return nil
@@ -88,11 +88,14 @@ func (e *Engine) SyncNowPlaying(ctx context.Context) error {
 			if found.Player != nil && strings.EqualFold(found.Player.State, "paused") {
 				state = model.ActPause
 			}
+			if r.State == model.ActHidden {
+				state = model.ActHidden // the user ended it here; Plex keeps playing
+			}
 			progress := plex.Progress(found)
 			if err = e.st.UpdateLiveSession(ctx, r.Key, state, progress); err == nil && !r.Scrobbled {
 				err = e.countLive(ctx, r, found, progress)
 			}
-		case r.Active() && (r.PlexKey != "" || r.PlexGUID != "") && now.Sub(time.Unix(r.UpdatedAt, 0)) >= nowPlayingGrace:
+		case (r.Active() || r.State == model.ActHidden) && (r.PlexKey != "" || r.PlexGUID != "") && now.Sub(time.Unix(r.UpdatedAt, 0)) >= nowPlayingGrace:
 			err = e.st.EndSession(ctx, r.Key)
 		}
 		if err != nil {

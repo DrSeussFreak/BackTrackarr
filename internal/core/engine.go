@@ -185,11 +185,19 @@ func (e *Engine) Ingest(ctx context.Context, ev model.Event, skipRelays bool) er
 	// A session that already counted as watched suppresses further live
 	// events (credits, pause/resume after the scrobble point).
 	done := sess != nil && sess.Scrobbled && time.Since(sess.UpdatedAt) < 4*time.Hour
+	// A session the user ended stays off Now Playing while it keeps playing.
+	hidden := sess != nil && sess.State == model.ActHidden && time.Since(sess.UpdatedAt) < 6*time.Hour
+	shownAs := func(state string) string {
+		if hidden {
+			return model.ActHidden
+		}
+		return state
+	}
 
 	switch ev.Action {
 	case model.ActStart, model.ActPause:
 		if err := e.st.PutSession(ctx, store.Session{Key: key, MediaID: ev.Media.ID, User: ev.User,
-			State: ev.Action, Progress: ev.Progress, Scrobbled: done, Player: ev.Player, Source: ev.Source}); err != nil {
+			State: shownAs(ev.Action), Progress: ev.Progress, Scrobbled: done, Player: ev.Player, Source: ev.Source}); err != nil {
 			return err
 		}
 		if ev.Action == model.ActStart && ev.Player != "" && strings.HasPrefix(ev.Source, "plex") {
@@ -217,7 +225,7 @@ func (e *Engine) Ingest(ctx context.Context, ev model.Event, skipRelays bool) er
 		// A library scan records a play. Nothing is playing because of it.
 		if ev.Source != plexMarkSource {
 			if err := e.st.PutSession(ctx, store.Session{Key: key, MediaID: ev.Media.ID, User: ev.User,
-				State: ev.Action, Progress: ev.Progress, Scrobbled: true, Player: ev.Player, Source: ev.Source}); err != nil {
+				State: shownAs(ev.Action), Progress: ev.Progress, Scrobbled: true, Player: ev.Player, Source: ev.Source}); err != nil {
 				return err
 			}
 		}
