@@ -30,6 +30,8 @@
 
 <section class="panel step">
   <h2>Import from your connected apps</h2>
+  <form method="post" action="/import/everything" class="row"><button>Import everything</button>
+    <span class="muted small">Plays, rewatches and ratings from Plex and every connected app. It only reads from them, and running it again is safe.</span></form>
   {{if .Sources}}
   <table>{{range .Sources}}<tr><td><b>{{.Label}}</b></td><td>{{if .Err}}<span class="bad small">{{.Err}}</span>{{else if .Last}}<span class="ok small">imported {{ts .Last}}</span>{{else}}<span class="muted small">not imported yet</span>{{end}}</td>
     <td><form method="post" action="/import/source/{{.Name}}"><button class="ghost">Import now</button></form></td></tr>{{end}}</table>

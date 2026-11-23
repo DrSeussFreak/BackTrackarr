@@ -36,7 +36,7 @@
   }
 
   async function refresh() {
-    if (document.hidden) return;
+    if (document.hidden || box.closest("[hidden]")) return;
     try {
       const res = await fetch("/api/now-playing", { cache: "no-store", credentials: "same-origin" });
       if (!res.ok) return;

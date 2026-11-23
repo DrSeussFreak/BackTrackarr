@@ -131,10 +131,7 @@ func (u *uniRun) flush(ctx context.Context) error {
 				if at == 0 {
 					at = r.at
 				}
-				if at == 0 {
-					at = time.Now().Unix()
-				}
-				if err := u.e.st.SetRating(ctx, m.ID, who, min(r.rating, 10), time.Unix(at, 0)); err != nil {
+				if err := u.e.st.SetRatingKeepNewest(ctx, m.ID, who, min(r.rating, 10), at); err != nil {
 					return err
 				}
 				u.res.Ratings++

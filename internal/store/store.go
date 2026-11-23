@@ -608,6 +608,23 @@ func (s *Store) SetRating(ctx context.Context, mediaID int64, user string, ratin
 	return err
 }
 
+// SetRatingKeepNewest stores an imported rating without replacing a newer
+// one. With no date (at 0) it only fills in a title that has no rating yet.
+func (s *Store) SetRatingKeepNewest(ctx context.Context, mediaID int64, user string, rating float64, at int64) error {
+	if rating <= 0 {
+		return nil
+	}
+	if at == 0 {
+		_, err := s.q(ctx).ExecContext(ctx, `INSERT OR IGNORE INTO ratings(media_id,user,rating,rated_at) VALUES(?,?,?,?)`,
+			mediaID, user, rating, time.Now().Unix())
+		return err
+	}
+	_, err := s.q(ctx).ExecContext(ctx, `INSERT INTO ratings(media_id,user,rating,rated_at) VALUES(?,?,?,?)
+		ON CONFLICT(media_id,user) DO UPDATE SET rating=excluded.rating, rated_at=excluded.rated_at
+		WHERE excluded.rated_at >= ratings.rated_at`, mediaID, user, rating, at)
+	return err
+}
+
 // ---------- playback sessions ----------
 
 type Session struct {

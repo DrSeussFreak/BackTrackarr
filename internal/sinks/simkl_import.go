@@ -28,6 +28,7 @@ func simklIDsFrom(raw map[string]any) model.IDs {
 
 type simklHistItem struct {
 	LastWatchedAt time.Time `json:"last_watched_at"`
+	UserRating    float64   `json:"user_rating"`
 	Movie         *struct {
 		Title string         `json:"title"`
 		Year  int            `json:"year"`
@@ -103,4 +104,31 @@ func (s *Simkl) ImportHistory(ctx context.Context, since time.Time, fn func(mode
 		}
 	}
 	return n, nil
+}
+
+// ImportRatings reads movie ratings. Simkl rates whole shows, which have no
+// single play to attach to, so those stay on Simkl and in its exports.
+func (s *Simkl) ImportRatings(ctx context.Context, fn func(model.Media, float64, time.Time) error) error {
+	h, err := s.headers(ctx)
+	if err != nil {
+		return err
+	}
+	res, err := do(ctx, "GET", s.url("/sync/all-items/movies?extended=full"), h, nil)
+	if err != nil {
+		return err
+	}
+	var out map[string][]simklHistItem
+	if err := json.Unmarshal(res.Body, &out); err != nil {
+		return err
+	}
+	for _, it := range out["movies"] {
+		if it.Movie == nil || it.UserRating <= 0 {
+			continue
+		}
+		m := model.Media{Kind: model.Movie, Title: it.Movie.Title, Year: it.Movie.Year, IDs: simklIDsFrom(it.Movie.IDs)}
+		if err := fn(m, it.UserRating, time.Time{}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

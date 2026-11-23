@@ -1,34 +1,50 @@
 {{define "content"}}
 <div class="head">
   <h1>Dashboard</h1>
-  {{template "userpicker" .}}
+  <div class="row">
+    {{template "userpicker" .}}
+    <button type="button" class="ghost" id="home-customize">Customize</button>
+  </div>
+</div>
+
+<div class="panel home-bar" id="home-bar" hidden>
+  <span class="small">Drag sections, or use the arrows. Hidden sections stay here so you can bring them back.</span>
+  <span class="row">
+    <span class="muted small" id="home-status" role="status"></span>
+    <button type="button" id="home-save">Save</button>
+    <button type="button" class="ghost" id="home-cancel">Cancel</button>
+  </span>
+  <form method="post" action="/home/layout/reset" onsubmit="return confirm('Put the home page back to its original layout?')"><button class="ghost">Reset</button></form>
 </div>
 
 {{if .NeedsSetup}}<p class="flash"><b>Finish setting up.</b> <a class="btn" href="/setup">Start setup →</a></p>{{end}}
 
-<section class="panel" id="now-playing">
-  <h2>Now playing</h2>
-  <div data-list><p class="muted small">Checking…</p></div>
-</section>
-<script src="/static/nowplaying.js" defer></script>
-
-{{with .Stats}}
-<section class="cards">
-  <div class="card"><div class="k">Total plays</div><div class="v">{{num .Plays}}</div></div>
-  <div class="card"><div class="k">Movies</div><div class="v">{{num .Movies}}</div></div>
-  <div class="card"><div class="k">Episodes</div><div class="v">{{num .Episodes}}</div></div>
-  <div class="card"><div class="k">Shows</div><div class="v">{{num .Shows}}</div></div>
-  <div class="card"><div class="k">Time watched</div><div class="v">{{hours .Seconds}}</div></div>
-  <div class="card"><div class="k">This year</div><div class="v">{{num .ThisYear}}</div></div>
-  {{if .Tracks}}<div class="card"><div class="k">Tracks played</div><div class="v">{{num .Tracks}}</div></div>
-  <div class="card"><div class="k">Listening time</div><div class="v">{{hours .ListenSeconds}}</div></div>{{end}}
-</section>
-
-<div class="grid2">
+<div class="home" id="home">
+{{range .Home}}
+<div class="home-item{{if .Wide}} wide{{end}}" data-id="{{.ID}}" data-title="{{.Title}}"{{if .Hidden}} data-hidden="1" hidden{{end}}>
+{{if eq .ID "now"}}
+  <section class="panel" id="now-playing">
+    <h2>Now playing</h2>
+    <div data-list><p class="muted small">Checking…</p></div>
+  </section>
+{{else if eq .ID "stats"}}
+  {{with $.Stats}}
+  <section class="cards">
+    <div class="card"><div class="k">Total plays</div><div class="v">{{num .Plays}}</div></div>
+    <div class="card"><div class="k">Movies</div><div class="v">{{num .Movies}}</div></div>
+    <div class="card"><div class="k">Episodes</div><div class="v">{{num .Episodes}}</div></div>
+    <div class="card"><div class="k">Shows</div><div class="v">{{num .Shows}}</div></div>
+    <div class="card"><div class="k">Time watched</div><div class="v">{{hours .Seconds}}</div></div>
+    <div class="card"><div class="k">This year</div><div class="v">{{num .ThisYear}}</div></div>
+    {{if .Tracks}}<div class="card"><div class="k">Tracks played</div><div class="v">{{num .Tracks}}</div></div>
+    <div class="card"><div class="k">Listening time</div><div class="v">{{hours .ListenSeconds}}</div></div>{{end}}
+  </section>
+  {{end}}
+{{else if eq .ID "years"}}
   <section class="panel">
     <h2>By year</h2>
-    {{$max := .MaxYear}}
-    {{range .Years}}
+    {{$max := $.Stats.MaxYear}}
+    {{range $.Stats.Years}}
       <div class="bar">
         <span class="y mono">{{.Year}}</span>
         <span class="track"><span class="fill" style="width: {{pct .Plays $max}}%"></span></span>
@@ -36,39 +52,50 @@
       </div>
     {{else}}<p class="muted">No plays yet.</p>{{end}}
   </section>
+{{else if eq .ID "shows"}}
   <section class="panel">
     <h2>Top shows</h2>
-    <ol class="rank">{{range .TopShows}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
-    <h2>Most-watched movies</h2>
-    <ol class="rank">{{range .TopMovies}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}×</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
-    {{if .Rewatched}}<h2>Most rewatched</h2>
-    <ol class="rank">{{range .Rewatched}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}×</span></li>{{end}}</ol>{{end}}
-    {{if .TopArtists}}<h2>Top artists</h2>
-    <ol class="rank">{{range .TopArtists}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{end}}</ol>{{end}}
+    <ol class="rank">{{range $.Stats.TopShows}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
   </section>
+{{else if eq .ID "movies"}}
+  <section class="panel">
+    <h2>Most-watched movies</h2>
+    <ol class="rank">{{range $.Stats.TopMovies}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}×</span></li>{{else}}<li class="muted">—</li>{{end}}</ol>
+  </section>
+{{else if eq .ID "rewatched"}}
+  {{if $.Stats.Rewatched}}<section class="panel">
+    <h2>Most rewatched</h2>
+    <ol class="rank">{{range $.Stats.Rewatched}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}×</span></li>{{end}}</ol>
+  </section>{{else}}<section class="panel home-empty"><h2>Most rewatched</h2><p class="muted small">Nothing here yet.</p></section>{{end}}
+{{else if eq .ID "artists"}}
+  {{if $.Stats.TopArtists}}<section class="panel">
+    <h2>Top artists</h2>
+    <ol class="rank">{{range $.Stats.TopArtists}}<li><span>{{.Name}}</span><span class="mono muted">{{num .Count}}</span></li>{{end}}</ol>
+  </section>{{else}}<section class="panel home-empty"><h2>Top artists</h2><p class="muted small">Nothing here yet.</p></section>{{end}}
+{{else if eq .ID "recent"}}
+  <section class="panel">
+    <h2>Recently watched <a class="more" href="/history{{if $.User}}?user={{$.User}}{{end}}">all history →</a></h2>
+    {{template "playtable" $.Recent}}
+  </section>
+{{else if eq .ID "shelf"}}
+  {{if or $.Books $.Games}}<section class="cards">
+    {{with $.Books}}<div class="card"><div class="k"><a href="/books">Books and audiobooks</a></div><div class="v">{{num .Titles}}</div></div>
+    <div class="card"><div class="k">Reads</div><div class="v">{{num .Reads}}</div></div>
+    <div class="card"><div class="k">Rereads</div><div class="v">{{num .Repeats}}</div></div>
+    <div class="card"><div class="k">Time listened or read</div><div class="v">{{hours .Seconds}}</div></div>{{end}}
+    {{with $.Games}}<div class="card"><div class="k"><a href="/games">Games</a></div><div class="v">{{num .Titles}}</div></div>
+    <div class="card"><div class="k">Games finished</div><div class="v">{{num .Finished}}</div></div>
+    <div class="card"><div class="k">Time played</div><div class="v">{{hours .Seconds}}</div></div>{{end}}
+  </section>{{else}}<section class="panel home-empty"><h2>Books and games totals</h2><p class="muted small">Nothing here yet.</p></section>{{end}}
+{{else if eq .ID "shelfrecent"}}
+  {{if $.ShelfRecent}}<section class="panel">
+    <h2>Recently read and played</h2>
+    {{template "shelfevents" $.ShelfRecent}}
+  </section>{{else}}<section class="panel home-empty"><h2>Recently read and played</h2><p class="muted small">Nothing here yet.</p></section>{{end}}
+{{end}}
 </div>
 {{end}}
-
-<section class="panel">
-  <h2>Recently watched <a class="more" href="/history{{if .User}}?user={{.User}}{{end}}">all history →</a></h2>
-  {{template "playtable" .Recent}}
-</section>
-
-{{if or .Books .Games}}
-<section class="cards">
-  {{with .Books}}<div class="card"><div class="k"><a href="/books">Books and audiobooks</a></div><div class="v">{{num .Titles}}</div></div>
-  <div class="card"><div class="k">Reads</div><div class="v">{{num .Reads}}</div></div>
-  <div class="card"><div class="k">Rereads</div><div class="v">{{num .Repeats}}</div></div>
-  <div class="card"><div class="k">Time listened or read</div><div class="v">{{hours .Seconds}}</div></div>{{end}}
-  {{with .Games}}<div class="card"><div class="k"><a href="/games">Games</a></div><div class="v">{{num .Titles}}</div></div>
-  <div class="card"><div class="k">Games finished</div><div class="v">{{num .Finished}}</div></div>
-  <div class="card"><div class="k">Time played</div><div class="v">{{hours .Seconds}}</div></div>{{end}}
-</section>
-{{if .ShelfRecent}}
-<section class="panel">
-  <h2>Recently read and played</h2>
-  {{template "shelfevents" .ShelfRecent}}
-</section>
-{{end}}
-{{end}}
+</div>
+<script src="/static/nowplaying.js" defer></script>
+<script src="/static/home.js" defer></script>
 {{end}}

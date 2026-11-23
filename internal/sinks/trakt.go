@@ -307,6 +307,53 @@ func (t *Trakt) ImportHistory(ctx context.Context, since time.Time, fn func(mode
 	}
 }
 
+// ImportRatings reads every movie and episode rating on Trakt.
+func (t *Trakt) ImportRatings(ctx context.Context, fn func(model.Media, float64, time.Time) error) error {
+	h, err := t.headers(ctx)
+	if err != nil {
+		return err
+	}
+	for _, kind := range []string{"movies", "episodes"} {
+		var res *result
+		for attempt := 0; ; attempt++ {
+			res, err = do(ctx, "GET", traktAPI+"/sync/ratings/"+kind, h, nil)
+			if err == nil || StatusOf(err) != 429 || attempt >= 5 {
+				break
+			}
+			if err := sleep(ctx, 10*time.Second); err != nil {
+				return err
+			}
+		}
+		if err != nil {
+			return err
+		}
+		var items []struct {
+			traktHistoryItem
+			Rating  float64   `json:"rating"`
+			RatedAt time.Time `json:"rated_at"`
+		}
+		if err := json.Unmarshal(res.Body, &items); err != nil {
+			return err
+		}
+		for _, it := range items {
+			var m model.Media
+			switch {
+			case it.Movie != nil:
+				m = model.Media{Kind: model.Movie, Title: it.Movie.Title, Year: it.Movie.Year, IDs: it.Movie.IDs}
+			case it.Episode != nil && it.Show != nil:
+				m = model.Media{Kind: model.Episode, Title: it.Episode.Title, ShowTitle: it.Show.Title,
+					Season: it.Episode.Season, Episode: it.Episode.Number, IDs: it.Episode.IDs, ShowIDs: it.Show.IDs}
+			default:
+				continue
+			}
+			if err := fn(m, it.Rating, it.RatedAt); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func sleep(ctx context.Context, d time.Duration) error {
 	select {
 	case <-ctx.Done():

@@ -243,6 +243,7 @@ type LibItem struct {
 	ViewCount            int         `json:"viewCount"`
 	ViewOffset           int64       `json:"viewOffset"`
 	LastViewedAt         int64       `json:"lastViewedAt"`
+	LastRatedAt          int64       `json:"lastRatedAt"`
 	AddedAt              int64       `json:"addedAt"`
 	UpdatedAt            int64       `json:"updatedAt"`
 	Duration             int64       `json:"duration"`

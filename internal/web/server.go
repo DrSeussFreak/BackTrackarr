@@ -145,6 +145,9 @@ func (s *Server) Handler() http.Handler {
 
 	admin := http.NewServeMux()
 	admin.HandleFunc("GET /{$}", s.dashboard)
+	admin.HandleFunc("POST /home/layout", s.homeSave)
+	admin.HandleFunc("POST /home/layout/reset", s.homeReset)
+	admin.HandleFunc("POST /import/everything", s.importEverything)
 	admin.HandleFunc("GET /history", s.history)
 	admin.HandleFunc("POST /plays/{id}/delete", s.deletePlay)
 	admin.HandleFunc("GET /sync", s.syncPage)
@@ -245,7 +248,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	users, _ := s.st.Users(r.Context())
 	data := M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "Recent": recent, "Users": users, "User": user,
-		"NeedsSetup": s.cfg.PlexURL == "" || s.cfg.PlexToken == ""}
+		"NeedsSetup": s.cfg.PlexURL == "" || s.cfg.PlexToken == "", "Home": s.homeLayout(r.Context())}
 	// Books and games cover one account each, so they aren't split by Plex user.
 	if user == "" {
 		if b, err := s.st.ShelfStats(r.Context(), ""); err == nil && b.Titles > 0 {

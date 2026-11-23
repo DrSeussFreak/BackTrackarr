@@ -140,3 +140,18 @@ details.rule summary { cursor: pointer; }
 details.rule form { padding: 10px 0 4px; }
 .step fieldset select { margin-bottom: 6px; }
 .panel pre { max-width: 100%; overflow-x: auto; margin: 6px 0; padding: 8px; background: var(--bg); border-radius: 6px; }
+.home { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; align-items: start; }
+.home-item { min-width: 0; }
+.home-item.wide { grid-column: 1 / -1; }
+.home-item[hidden] { display: none; }
+.home:not(.editing) .home-item:has(.home-empty) { display: none; }
+.home.editing .home-item { outline: 1px dashed var(--line); outline-offset: 3px; margin-bottom: 16px; cursor: grab; }
+.home-item.off > :not(.home-tools) { opacity: .35; }
+.home-item.dragging { opacity: .5; }
+.home-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.home-tools b { flex: 1 1 140px; font-size: 13px; }
+.home-tools button { padding: 4px 8px; font-size: 12px; }
+.home-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 4px; z-index: 5; }
+.home-bar[hidden] { display: none; }
+@media (max-width: 760px) { .home { grid-template-columns: minmax(0, 1fr); } }
+#home-customize[hidden] { display: none; }
