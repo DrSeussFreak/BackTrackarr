@@ -3,6 +3,8 @@
   const box = document.getElementById("now-playing");
   if (!box) return;
   const list = box.querySelector("[data-list]");
+  let busy = false;
+  let holdUntil = 0;
 
   function row(p) {
     const el = document.createElement("div");
@@ -45,25 +47,50 @@
   }
 
   async function endSession(p, button) {
-    if (!confirm("Remove " + p.display + " from Now playing?\n\nThis doesn't stop playback in Plex.")) return;
+    const who = [p.user, p.player].filter(Boolean).join(" on ");
+    const ask = p.can_stop
+      ? "Stop " + p.display + (who ? " for " + who : "") + "?\n\nThis stops playback in Plex right away."
+      : "Remove " + p.display + " from Now playing?\n\nBackTrackarr can't stop playback on " + (p.source || "this source") + ".";
+    if (!confirm(ask)) return;
     button.disabled = true;
     button.textContent = "Ending…";
+    busy = true;
+    let problem = "";
     try {
       const res = await fetch("/api/now-playing/end", {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ key: p.key }),
       });
-      if (!res.ok && res.status !== 404) throw new Error();
-      await refresh();
+      if (!res.ok && res.status !== 404) {
+        const body = await res.json().catch(() => ({}));
+        problem = body.error || "Couldn't end this session. Try again.";
+      }
     } catch {
-      button.disabled = false;
-      button.textContent = "Couldn't end. Try again";
+      problem = "Couldn't reach BackTrackarr. Try again.";
     }
+    busy = false;
+    if (!problem) {
+      holdUntil = 0; // an earlier failure's message no longer applies
+      await refresh();
+      return;
+    }
+    button.disabled = false;
+    button.textContent = "End session";
+    const row = button.closest(".np");
+    let note = row.querySelector(".np-error");
+    if (!note) {
+      note = document.createElement("div");
+      note.className = "err small np-error";
+      note.setAttribute("role", "alert");
+      row.append(note);
+    }
+    note.textContent = problem;
+    holdUntil = Date.now() + 15000; // leave the reason on screen long enough to read
   }
 
   async function refresh() {
-    if (document.hidden || box.closest("[hidden]")) return;
+    if (document.hidden || box.closest("[hidden]") || busy || Date.now() < holdUntil) return;
     try {
       const res = await fetch("/api/now-playing", { cache: "no-store", credentials: "same-origin" });
       if (!res.ok) return;

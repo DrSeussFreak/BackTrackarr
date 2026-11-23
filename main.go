@@ -188,6 +188,7 @@ func run() (bool, error) {
 		restart.Store(true)
 		cancel()
 	}
+	go ui.RunPlexManager(ctx)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
 		Handler:           ui.Handler(),

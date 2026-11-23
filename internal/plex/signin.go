@@ -65,6 +65,9 @@ func tvRequest(ctx context.Context, method, u, clientID, token string, out any) 
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return fmt.Errorf("plex.tv answered HTTP %d: %w", resp.StatusCode, ErrUnauthorized)
+		}
 		return fmt.Errorf("plex.tv answered HTTP %d", resp.StatusCode)
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(out)

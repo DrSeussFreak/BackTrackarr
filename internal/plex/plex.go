@@ -21,6 +21,14 @@ import (
 
 var ErrNotFound = errors.New("plex: not found")
 
+// ErrUnauthorized means Plex rejected the token, or the account can't do this.
+var ErrUnauthorized = errors.New("plex: not authorized")
+
+// SessionInfo identifies one live stream on the server.
+type SessionInfo struct {
+	ID string `json:"id"`
+}
+
 type Guid struct {
 	ID string `json:"id"`
 }
@@ -63,6 +71,7 @@ type Metadata struct {
 	Guids                []Guid         `json:"Guid"`
 	User                 *SessionUser   `json:"User,omitempty"`
 	Player               *SessionPlayer `json:"Player,omitempty"`
+	Session              *SessionInfo   `json:"Session,omitempty"`
 }
 
 // WebhookPayload is the JSON in the "payload" field of a Plex webhook.
@@ -231,6 +240,9 @@ func (c *Client) get(ctx context.Context, p string, q url.Values) (*container, e
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrNotFound
 	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("plex %s: %w", p, ErrUnauthorized)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("plex %s: %s", p, resp.Status)
 	}
@@ -258,6 +270,19 @@ func (c *Client) Sessions(ctx context.Context) ([]Metadata, error) {
 		return nil, err
 	}
 	return mc.MediaContainer.Metadata, nil
+}
+
+// TerminateSession stops one live stream. It is the only Plex action that
+// doesn't need AllowWrites: it changes no library data, and it only runs when
+// a person presses End session on that stream. Plex requires Plex Pass.
+func (c *Client) TerminateSession(ctx context.Context, sessionID, reason string) error {
+	resp, err := c.request(ctx, http.MethodGet, "/status/sessions/terminate", url.Values{"sessionId": {sessionID}, "reason": {reason}})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	return nil
 }
 
 // History returns one page of the server's full watch history, oldest first.

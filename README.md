@@ -203,9 +203,14 @@ the changes, and apply. This recreates every user's playlists and puts back
 sort titles, labels, collections and ratings. Restored fields are locked so a
 refresh won't undo them.
 
-**BackTrackarr never changes Plex** unless you set `PLEX_ALLOW_WRITES=true`. Even
-then, it only writes when you press a button (restore, copy). It only ever
-creates playlists or fills in fields; it never deletes anything.
+**BackTrackarr never changes your Plex data** unless you set
+`PLEX_ALLOW_WRITES=true`. Even then, it only writes when you press a button
+(restore, copy). It only ever creates playlists or fills in fields; it never
+deletes anything.
+
+**End session** on the home page is the one separate Plex action. It stops
+that one live stream when you press it and confirm (Plex requires Plex Pass),
+and it changes no library data.
 
 ## Copying playlists
 

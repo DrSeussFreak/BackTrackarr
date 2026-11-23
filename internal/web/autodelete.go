@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"sort"
@@ -31,24 +32,30 @@ func (s *Server) apiNowPlaying(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range rows {
 		rows[i].FinishAt = s.eng.FinishPercent(rows[i].Media.Kind)
+		rows[i].CanStop = s.eng.CanStopPlayback(rows[i].Source)
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, M{"items": rows})
 }
 
-// apiEndSession removes a session from Now Playing. It never calls Plex, so
-// playback itself carries on.
+// apiEndSession stops a Plex stream and removes it from Now Playing. Sources
+// BackTrackarr can't control are only removed from the list.
 func (s *Server) apiEndSession(w http.ResponseWriter, r *http.Request) {
-	found, err := s.st.HideSession(r.Context(), r.FormValue("key"))
+	res, err := s.eng.EndPlayback(r.Context(), r.FormValue("key"))
+	var shown core.EndPlaybackError
+	if errors.As(err, &shown) {
+		jsonError(w, http.StatusBadGateway, shown.Error())
+		return
+	}
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
-	if !found {
+	if !res.Found {
 		jsonError(w, http.StatusNotFound, "That session has already ended.")
 		return
 	}
-	writeJSON(w, M{"ok": true})
+	writeJSON(w, M{"ok": true, "stopped": res.Stopped})
 }
 
 func (s *Server) importSource(w http.ResponseWriter, r *http.Request) {

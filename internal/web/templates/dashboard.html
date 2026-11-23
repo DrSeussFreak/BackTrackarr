@@ -20,6 +20,7 @@
 </div>
 
 {{if .NeedsSetup}}<p class="flash"><b>Finish setting up.</b> <a class="btn" href="/setup">Start setup →</a></p>{{end}}
+{{if .PlexNeedsSignIn}}<p class="flash"><b>Plex needs you to sign in again.</b> <a class="btn" href="/setup#plex">Reconnect Plex →</a></p>{{end}}
 
 <div class="home" id="home">
 {{range .Home}}

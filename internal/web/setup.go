@@ -39,6 +39,8 @@ func (s *Server) routesSetup(admin *http.ServeMux) {
 	admin.HandleFunc("POST /setup/plex/status", s.setupPlexStatus)
 	admin.HandleFunc("POST /setup/plex/choose", s.setupPlexChoose)
 	admin.HandleFunc("POST /setup/plex/people", s.setupPlexPeople)
+	admin.HandleFunc("POST /setup/plex/check", s.setupPlexCheck)
+	admin.HandleFunc("GET /api/plex/health", s.apiPlexHealth)
 	admin.HandleFunc("POST /setup/scan", s.setupScan)
 	admin.HandleFunc("POST /setup/app/options", s.setupAppOptions)
 	admin.HandleFunc("POST /setup/app", s.setupApp)
@@ -222,6 +224,7 @@ func (s *Server) savePlexServer(ctx context.Context, srv plex.Server) (string, e
 	if err := s.saveSettings(ctx, map[string]string{"PLEX_URL": addr, "PLEX_TOKEN": srv.AccessToken}, nil); err != nil {
 		return "", err
 	}
+	_ = s.st.SetKV(ctx, plexMachineKey, srv.MachineID)
 	s.log.Info("plex connected from setup", "server", srv.Name)
 	s.restartSoon()
 	return addr, nil

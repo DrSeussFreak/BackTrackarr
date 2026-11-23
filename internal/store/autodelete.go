@@ -24,6 +24,8 @@ type NowPlayingRow struct {
 	Display   string      `json:"display"`
 	Counted   bool        `json:"counted"`
 	FinishAt  float64     `json:"finish_at"`
+	// CanStop: End session can stop the real stream, not just clear this row.
+	CanStop bool `json:"can_stop"`
 }
 
 // NowPlaying lists current sessions. A source can vanish without saying it

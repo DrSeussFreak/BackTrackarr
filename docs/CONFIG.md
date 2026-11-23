@@ -110,7 +110,8 @@ Optional:
   watch marks? Default `true`.
 - **`PLEX_ALLOW_WRITES`**: Allow restoring to a new Plex server and copying
   playlists between users? These only run when you press a button. Default
-  `false`, meaning BackTrackarr never changes Plex.
+  `false`, meaning BackTrackarr never changes your Plex data. Pressing **End
+  session** on a live stream doesn't need this setting.
 
 ---
 

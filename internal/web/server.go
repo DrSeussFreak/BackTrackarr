@@ -53,6 +53,7 @@ type Server struct {
 	// Restart reloads the app with newly saved settings. Set by main.
 	Restart     func()
 	setup       setupState
+	plexMgr     plexManager
 	boot        string // changes each time the app reloads
 	restartOnce sync.Once
 	// Throttle paces outbound requests. Set by main, nil in tests.
@@ -250,7 +251,8 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	users, _ := s.st.Users(r.Context())
 	data := M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "StatsUpdating": updating, "Recent": recent, "Users": users, "User": user,
-		"NeedsSetup": s.cfg.PlexURL == "" || s.cfg.PlexToken == "", "Home": s.homeLayout(r.Context())}
+		"NeedsSetup": s.cfg.PlexURL == "" || s.cfg.PlexToken == "", "Home": s.homeLayout(r.Context()),
+		"PlexNeedsSignIn": s.plexStatus().State == plexStateSignIn}
 	// Books and games cover one account each, so they aren't split by Plex user.
 	if user == "" {
 		b, booksUpdating := s.st.ShelfStatsNow(r.Context(), "")

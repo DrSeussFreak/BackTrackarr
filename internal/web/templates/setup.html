@@ -7,7 +7,11 @@
   {{if .PlexConnected}}
     <p><span class="ok">Connected</span> <span class="muted mono small">{{.PlexURL}}</span></p>
     {{with .PlexErr}}<p class="bad">{{.}}</p>{{end}}
+    <p id="plex-health" class="small muted" role="status">Checking…</p>
+    <p class="muted small">BackTrackarr checks this every 15 minutes and updates the key and address from Plex if they change.</p>
+    <button class="ghost" id="plex-check" type="button">Check now</button>
     <button class="ghost" id="plex-signin">Sign in again</button>
+    <script src="{{asset "plexhealth.js"}}" defer></script>
   {{else}}
     <p>Sign in on Plex's page. Your token, server, users and libraries fill in automatically.</p>
     <button id="plex-signin">Sign in with Plex</button>

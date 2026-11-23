@@ -79,6 +79,10 @@ func (c *Client) request(ctx context.Context, method, p string, q url.Values) (*
 		resp.Body.Close()
 		return nil, ErrNotFound
 	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		resp.Body.Close()
+		return nil, fmt.Errorf("plex %s %s: %w", method, p, ErrUnauthorized)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		resp.Body.Close()
