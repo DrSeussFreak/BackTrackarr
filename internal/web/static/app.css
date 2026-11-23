@@ -157,3 +157,4 @@ details.rule form { padding: 10px 0 4px; }
 #home-customize[hidden] { display: none; }
 .dropzone-clear { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 12px; }
 .dropzone-clear[hidden] { display: none; }
+.dropzone-folder { margin-top: 6px; padding: 4px 10px; font-size: 12px; }

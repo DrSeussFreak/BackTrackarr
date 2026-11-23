@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <meta name="theme-color" content="#17171a">
 <link rel="stylesheet" href="{{asset "app.css"}}">
-{{if .Refresh}}<meta http-equiv="refresh" content="4">{{end}}
+{{if .Refresh}}<meta name="bt-refresh" content="4"><noscript><meta http-equiv="refresh" content="4"></noscript>{{end}}
 </head>
 <body>
 <header class="top">
@@ -39,6 +39,7 @@
 {{template "content" .}}
 </main>
 <script src="{{asset "dropzone.js"}}" defer></script>
+<script src="{{asset "refresh.js"}}" defer></script>
 </body>
 </html>{{end}}
 
@@ -54,7 +55,7 @@
 
 {{define "jobs"}}
 {{if .}}
-<section class="panel">
+<section class="panel" id="jobs-panel">
   <h2>Jobs</h2>
   <table>
     {{range .}}<tr><td><b>{{.Name}}</b></td><td>{{if .Running}}<span class="warn">running</span>{{else if .Err}}<span class="bad">failed</span>{{else}}<span class="ok">done</span>{{end}}</td>

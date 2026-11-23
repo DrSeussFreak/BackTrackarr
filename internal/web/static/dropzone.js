@@ -3,6 +3,13 @@
 // pieces so a large batch can't hit a request or proxy limit.
 (() => {
   const CHUNK = 8 * 1024 * 1024;
+  let working = 0; // drops being read and uploads under way
+  let pickerUntil = 0; // a file dialog is open, so the page must not reload
+  window.btUploadBusy = () => working > 0 || Date.now() < pickerUntil;
+  const watchPicker = (el) => {
+    el.addEventListener("click", () => { pickerUntil = Date.now() + 10 * 60 * 1000; });
+    ["change", "cancel"].forEach((ev) => el.addEventListener(ev, () => { pickerUntil = 0; }));
+  };
   const WORKERS = 3;
 
   const allowed = (input, file) => {
@@ -97,7 +104,7 @@
     const zone = document.createElement("label");
     zone.className = "dropzone";
     const text = document.createElement("span");
-    const empty = many ? "Drop files or folders here, or click to choose" : "Drop a file here, or click to choose";
+    const empty = many ? "Drop files or folders here, or click to choose files" : "Drop a file here, or click to choose";
     text.textContent = empty;
     const types = document.createElement("span");
     types.className = "muted small";
@@ -107,6 +114,7 @@
     zone.append(input, text, types);
     let picked = [];
     let clear = null;
+    watchPicker(input);
 
     const show = (skipped = 0) => {
       const n = picked.length;
@@ -132,6 +140,29 @@
         show();
       });
       zone.append(clear);
+
+      // A normal file dialog can't pick a folder on macOS.
+      const folder = document.createElement("input");
+      folder.type = "file";
+      folder.webkitdirectory = true;
+      folder.hidden = true;
+      folder.setAttribute("aria-label", "Choose a folder");
+      const choose = document.createElement("button");
+      choose.type = "button";
+      choose.className = "ghost dropzone-folder";
+      choose.textContent = "Choose folder";
+      choose.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        folder.click();
+      });
+      watchPicker(folder);
+      folder.addEventListener("click", (e) => e.stopPropagation());
+      folder.addEventListener("change", () => {
+        add([...folder.files].filter((f) => !f.name.startsWith(".")));
+        folder.value = "";
+      });
+      zone.append(choose, folder);
     }
 
     const add = (files) => {
@@ -185,7 +216,12 @@
         return;
       }
       text.textContent = "Reading files…";
-      add(await droppedFiles(e.dataTransfer));
+      working++;
+      try {
+        add(await droppedFiles(e.dataTransfer));
+      } finally {
+        working--;
+      }
     });
 
     if (!many || !input.form) return;
@@ -197,6 +233,7 @@
       buttons.forEach((b) => { b.disabled = true; });
       const leaving = (ev) => { ev.preventDefault(); ev.returnValue = ""; };
       window.addEventListener("beforeunload", leaving);
+      working++;
       try {
         const batch = await sendAll(picked, (d, n, sent, total) => {
           text.textContent = "Uploading " + d.toLocaleString() + " of " + n.toLocaleString() + " files";
@@ -217,6 +254,7 @@
         window.removeEventListener("beforeunload", leaving);
         form.submit();
       } catch (err) {
+        working--;
         window.removeEventListener("beforeunload", leaving);
         buttons.forEach((b) => { b.disabled = false; });
         text.textContent = err.message || "Upload failed.";
