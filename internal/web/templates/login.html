@@ -11,7 +11,9 @@
     <p><button>Sign in</button></p>
   </form>
   {{end}}
-  {{if .HasPasskeys}}
+  {{if and .HasPasskeys .HidePasskey}}
+    <p class="muted small">Passkeys only work in a web browser. In this app, use your password and authenticator code.</p>
+  {{else if .HasPasskeys}}
     {{if .HasPassword}}<p class="or">or</p>{{end}}
     {{if .PasskeyErr}}<p class="muted small">Passkeys aren't available at this address: {{.PasskeyErr}}</p>
     {{else}}

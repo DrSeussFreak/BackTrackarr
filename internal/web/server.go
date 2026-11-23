@@ -58,6 +58,7 @@ type Server struct {
 	// Throttle paces outbound requests. Set by main, nil in tests.
 	Throttle *throttle.Transport
 	uploads  uploads
+	autosave autosaveState
 }
 
 var funcs = template.FuncMap{
@@ -241,18 +242,14 @@ func (s *Server) plexWebhook(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	user := r.URL.Query().Get("user")
-	stats, err := s.st.Stats(r.Context(), user)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
+	stats, updating := s.st.StatsNow(r.Context(), user)
 	recent, err := s.st.History(r.Context(), store.HistoryQuery{User: user, Limit: 15})
 	if err != nil {
 		s.fail(w, err)
 		return
 	}
 	users, _ := s.st.Users(r.Context())
-	data := M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "Recent": recent, "Users": users, "User": user,
+	data := M{"Title": "Dashboard", "Nav": "dash", "Stats": stats, "StatsUpdating": updating, "Recent": recent, "Users": users, "User": user,
 		"NeedsSetup": s.cfg.PlexURL == "" || s.cfg.PlexToken == "", "Home": s.homeLayout(r.Context())}
 	// Books and games cover one account each, so they aren't split by Plex user.
 	if user == "" {

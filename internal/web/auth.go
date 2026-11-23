@@ -221,7 +221,13 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		}
 		if sess, h := s.sessionFromCookie(r); sess != nil && sess.MFADone {
 			if time.Since(time.Unix(sess.SeenAt, 0)) > 5*time.Minute {
-				_ = s.st.TouchAuthSession(ctx, h, s.cfg.SessionTTL)
+				// Slide both expiries: the device drops the cookie at its own
+				// Max-Age even when the server-side session is still valid.
+				if err := s.st.TouchAuthSession(ctx, h, s.cfg.SessionTTL); err == nil {
+					if c, err := r.Cookie(sessionCookie); err == nil {
+						s.setCookie(w, r, sessionCookie, c.Value, s.cfg.SessionTTL)
+					}
+				}
 			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, authKey{}, authInfo{User: sess.User, SessionID: h})))
 			return
@@ -249,7 +255,15 @@ func (s *Server) routesAuth(root *http.ServeMux) {
 func (s *Server) loginData(r *http.Request, msg string) M {
 	_, rpErr := s.relyingParty(r)
 	return M{"Title": "Sign in", "Bare": true, "Next": safeNext(r.FormValue("next")), "Error": msg,
-		"HasPassword": s.cfg.AdminPassword != "", "HasPasskeys": s.hasPasskeys(r.Context()), "PasskeyErr": errString(rpErr)}
+		"HasPassword": s.cfg.AdminPassword != "", "HasPasskeys": s.hasPasskeys(r.Context()), "PasskeyErr": errString(rpErr),
+		"HidePasskey": inWrapperApp(r) && s.cfg.AdminPassword != ""}
+}
+
+// inWrapperApp reports a request from the Android or Mac app. Their embedded
+// web views can't reach the system's passkeys, so those buttons are hidden
+// whenever another way to sign in exists.
+func inWrapperApp(r *http.Request) bool {
+	return strings.Contains(r.UserAgent(), "BackTrackarrApp/")
 }
 
 func errString(err error) string {
@@ -318,7 +332,8 @@ func (s *Server) mfaData(r *http.Request, msg string) M {
 	left, _ := s.st.RecoveryCodesLeft(ctx, s.cfg.AdminUser)
 	_, rpErr := s.relyingParty(r)
 	return M{"Title": "Two-step sign-in", "Bare": true, "Next": safeNext(r.FormValue("next")), "Error": msg,
-		"TOTP": s.totpEnabled(ctx), "HasPasskeys": s.hasPasskeys(ctx), "RecoveryLeft": left, "PasskeyErr": errString(rpErr)}
+		"TOTP": s.totpEnabled(ctx), "HasPasskeys": s.hasPasskeys(ctx), "RecoveryLeft": left, "PasskeyErr": errString(rpErr),
+		"HidePasskey": inWrapperApp(r) && (s.totpEnabled(ctx) || left > 0)}
 }
 
 func (s *Server) mfaPage(w http.ResponseWriter, r *http.Request) {

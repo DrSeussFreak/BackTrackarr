@@ -200,3 +200,11 @@ tr[data-level][hidden], details.panel[hidden] { display: none; }
 @keyframes conn-pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .conn[data-status="testing"] .conn-dot { animation: none; } }
 .conn-test[hidden] { display: none; }
+.settings-savebar { position: fixed; left: 50%; bottom: 12px; transform: translateX(-50%); width: min(calc(100vw - 32px), 1040px); box-sizing: border-box; z-index: 6; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 -4px 14px rgba(0, 0, 0, .25); }
+.settings-savebar button { flex: none; margin: 0; }
+#settings-save-status { min-width: 0; color: var(--muted); }
+#settings-save-status[data-state="ok"] { color: var(--ok); }
+#settings-save-status[data-state="warn"] { color: var(--warn); }
+#settings-save-status[data-state="bad"] { color: var(--bad); }
+.save-note { margin-top: 4px; max-width: 280px; }
+main:has(.settings-savebar) { padding-bottom: 88px; }

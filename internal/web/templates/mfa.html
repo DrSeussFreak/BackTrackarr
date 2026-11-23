@@ -3,7 +3,7 @@
   <img class="auth-logo" src="/static/logo.svg" alt="BackTrackarr logo">
   <h1>Two-step sign-in</h1>
   {{with .Error}}<p class="err">{{.}}</p>{{end}}
-  {{if .HasPasskeys}}
+  {{if and .HasPasskeys (not .HidePasskey)}}
     {{if .PasskeyErr}}<p class="muted small">Passkeys aren't available at this address: {{.PasskeyErr}}</p>
     {{else}}
     <p><button type="button" onclick="btPasskeyLogin({{.Next}}, document.getElementById('pk-err'))">Use my passkey</button></p>
@@ -11,12 +11,12 @@
     {{end}}
   {{end}}
   {{if or .TOTP .RecoveryLeft}}
-    {{if .HasPasskeys}}<p class="or">or</p>{{end}}
+    {{if and .HasPasskeys (not .HidePasskey)}}<p class="or">or</p>{{end}}
     <form method="post" action="/login/mfa">
       <input type="hidden" name="next" value="{{.Next}}">
       <p><input name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus
         placeholder="{{if .TOTP}}6-digit code from your authenticator app{{else}}Recovery code{{end}}"></p>
-      <p><button {{if .HasPasskeys}}class="ghost"{{end}}>Continue</button></p>
+      <p><button {{if and .HasPasskeys (not .HidePasskey)}}class="ghost"{{end}}>Continue</button></p>
     </form>
     <p class="muted small">Lost your device? Enter one of your recovery codes ({{.RecoveryLeft}} left) instead.</p>
   {{end}}

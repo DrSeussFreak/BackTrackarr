@@ -18,6 +18,7 @@ func (s *Server) routesSettings(admin *http.ServeMux) {
 	admin.HandleFunc("GET /settings", s.settingsPage)
 	admin.HandleFunc("POST /settings", s.settingsSave)
 	admin.HandleFunc("POST /settings/arr-options", s.settingsArrOptions)
+	admin.HandleFunc("POST /settings/autosave", s.settingsAutosave)
 	admin.HandleFunc("POST /settings/adopt", s.settingsAdopt)
 	admin.HandleFunc("POST /settings/password", s.settingsPassword)
 	admin.HandleFunc("POST /settings/export", s.settingsExport)

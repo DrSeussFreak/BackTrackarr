@@ -179,6 +179,8 @@ func run() (bool, error) {
 		go eng.RunArrArchiver(ctx)
 	}
 
+	go st.StatsNow(ctx, "") // have home page totals ready after a restart
+
 	ui := web.New(cfg, st, eng, log)
 	ui.Throttle = limiter
 	ui.Restart = func() {

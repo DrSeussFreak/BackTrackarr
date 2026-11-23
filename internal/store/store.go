@@ -51,6 +51,11 @@ type Store struct {
 	statsMu    sync.Mutex
 	statsCache map[string]cachedStats
 
+	// Background rebuilds of those totals (stats_fast.go).
+	statsBusy    atomic.Bool
+	statsLastRun atomic.Int64
+	statsCost    atomic.Int64 // how long the last rebuild took, in nanoseconds
+
 	// CompressBackups gzips daily snapshots (BACKUP_COMPRESS, on by default).
 	CompressBackups bool
 

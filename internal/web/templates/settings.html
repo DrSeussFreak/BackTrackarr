@@ -54,14 +54,14 @@
   <button type="button" class="level-filter level Advanced" data-filter="Advanced">Advanced</button>
   <span class="muted" id="settings-filter-note" role="status"></span>
 </div>
-<p class="muted small">Only need the basics? Click <b>Essential</b> and fill in what's there. Hidden settings keep their values when you save. Each app has a <b>Test</b> button, or see them all on <a href="/connections">Connections</a>.</p>
+<p class="muted small">Only need the basics? Click <b>Essential</b> and fill in what's there. Changes save on their own when you leave a field, except sign-in, address, webhook token and Plex write access, which need <b>Save and apply</b>. Hidden settings keep their values. Each app has a <b>Test</b> button, or see them all on <a href="/connections">Connections</a>.</p>
 <form method="post" action="/settings" autocomplete="off" novalidate id="settings-form" data-probes="{{.ConnProbes}}">
   {{range .Groups}}
   <details class="panel" {{if eq .Name "General"}}open{{end}}>
     <summary><b>{{.Name}}</b>{{with .Help}}<span class="muted small">{{.}}</span>{{end}}</summary>
     <table>
       {{range .Rows}}
-      <tr data-level="{{.Info.Level}}">
+      <tr data-level="{{.Info.Level}}" data-key="{{.Key}}" data-type="{{.Type}}">
         <td><label for="{{.Key}}"><b>{{.Label}}</b></label>{{with .Info.Level}}<span class="level {{.}}">{{.}}</span>{{end}}
           <div class="needed">{{.Info.What}}</div>
           <div class="muted small"><b>Needed for:</b> {{.Info.Needed}}</div>{{if .Help}}<div class="muted small">{{.Help}}</div>{{end}}<div class="muted small mono">{{.Key}}</div></td>
@@ -88,7 +88,10 @@
     </table>
   </details>
   {{end}}
-  <p><button>Save and apply</button></p>
+  <div class="settings-savebar" id="settings-savebar">
+    <span class="small" id="settings-save-status" role="status">Changes save automatically.</span>
+    <button>Save and apply</button>
+  </div>
 </form>
 <p class="muted small">Only recovery switches stay outside the app. If a saved value locks you out, start once with <code>SETTINGS_IGNORE=true</code> and <code>ADMIN_PASSWORD</code> set. If you lose your authenticator, use <code>AUTH_RESET=true</code>.</p>
 <script src="{{asset "settings.js"}}" defer></script>
