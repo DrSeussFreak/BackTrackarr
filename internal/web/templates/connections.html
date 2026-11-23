@@ -1,0 +1,28 @@
+{{define "content"}}
+<div class="head">
+  <h1>Connections</h1>
+  <div class="row"><span class="muted small" id="conn-summary" role="status"></span><button type="button" id="conn-all">Test all</button></div>
+</div>
+<p class="muted small">Tests only read. They never send a play, a webhook event or an AI prompt, and results never show your keys. <a href="/settings">Change settings</a></p>
+{{range .Groups}}
+<section class="panel">
+  <h2>{{.Name}}</h2>
+  <div class="conn-list">
+  {{range .Rows}}
+    <div class="conn" data-id="{{.ID}}" data-status="{{.Status}}">
+      <span class="conn-dot" aria-hidden="true"></span>
+      <div class="conn-body">
+        <div><b>{{.Name}}</b> <span class="conn-head">{{.Headline}}</span> <span class="muted small mono conn-ms">{{if .Ms}}{{.Ms}} ms{{end}}</span></div>
+        <ul class="conn-details muted small">{{range .Details}}<li>{{.}}</li>{{end}}</ul>
+        <div class="conn-fix small">{{if .Fix}}<b>How to fix:</b> {{.Fix}}{{end}}</div>
+        <div class="conn-when muted small">{{if .At}}Last tested {{ts .At}}{{end}}</div>
+      </div>
+      <button type="button" class="ghost conn-test" {{if eq .Status "off"}}hidden{{end}} aria-label="Test {{.Name}}">Test</button>
+      {{if eq .Status "off"}}<a class="btn ghost conn-setup" href="/settings">Set up</a>{{end}}
+    </div>
+  {{end}}
+  </div>
+</section>
+{{end}}
+<script src="{{asset "connections.js"}}" defer></script>
+{{end}}

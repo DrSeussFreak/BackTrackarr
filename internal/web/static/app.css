@@ -172,3 +172,31 @@ details.rule form { padding: 10px 0 4px; }
 .level-filter.on, .level-filter.on:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .arr-status { margin-top: 4px; }
 tr[data-level][hidden], details.panel[hidden] { display: none; }
+.conn-list { display: grid; }
+.conn { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.conn:first-child { border-top: 0; }
+.conn-body { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.conn-dot { flex: none; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; border: 1px solid var(--muted); }
+.conn[data-status="ok"] .conn-dot { background: var(--ok); border-color: var(--ok); }
+.conn[data-status="warn"] .conn-dot { background: var(--warn); border-color: var(--warn); }
+.conn[data-status="fail"] .conn-dot { background: var(--bad); border-color: var(--bad); }
+.conn[data-status="testing"] .conn-dot { background: var(--accent); border-color: var(--accent); animation: conn-pulse 1s infinite; }
+.conn[data-status="off"] { opacity: .65; }
+.conn-head { margin-left: 6px; color: var(--muted); }
+.conn[data-status="ok"] .conn-head { color: var(--ok); }
+.conn[data-status="warn"] .conn-head { color: var(--warn); }
+.conn[data-status="fail"] .conn-head { color: var(--bad); }
+.conn-details { margin: 2px 0 0; padding-left: 16px; }
+.conn-details:empty { display: none; }
+.conn-fix { margin-top: 3px; }
+.conn-fix:empty, .conn-when:empty { display: none; }
+.conn-test, .conn-setup { flex: none; padding: 4px 10px; font-size: 12px; }
+.conn-inline { display: block; margin-top: 6px; padding: 3px 8px; font-size: 12px; }
+.conn-result { margin-top: 5px; max-width: 280px; overflow-wrap: anywhere; }
+.conn-result:empty { display: none; }
+.conn-result[data-status="ok"] b { color: var(--ok); }
+.conn-result[data-status="warn"] b { color: var(--warn); }
+.conn-result[data-status="fail"] b { color: var(--bad); }
+@keyframes conn-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .conn[data-status="testing"] .conn-dot { animation: none; } }
+.conn-test[hidden] { display: none; }

@@ -126,7 +126,7 @@ func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger
 	}
 	fm["mine"] = eng.IsMyService
 	fm["asset"] = assetURL
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security", "encryption", "jobs"} {
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security", "encryption", "jobs", "connections"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
@@ -152,6 +152,7 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("POST /import/everything", s.importEverything)
 	admin.HandleFunc("POST /upload/chunk", s.uploadChunk)
 	s.routesJobs(admin)
+	s.routesConnections(admin)
 	admin.HandleFunc("GET /history", s.history)
 	admin.HandleFunc("POST /plays/{id}/delete", s.deletePlay)
 	admin.HandleFunc("GET /sync", s.syncPage)

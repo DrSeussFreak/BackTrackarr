@@ -88,7 +88,7 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 		paused = s.Throttle.Paused()
 	}
 	s.render(w, "settings", M{"Title": "Settings", "Nav": "settings", "Groups": visibleSettings(), "EnvCount": envCount,
-		"HasPassword": s.cfg.AdminPassword != "", "Paused": paused, "Ignored": config.IgnoreSaved(), "Flash": takeFlash(w, r)})
+		"HasPassword": s.cfg.AdminPassword != "", "Paused": paused, "ConnProbes": s.connProbesJSON(), "Ignored": config.IgnoreSaved(), "Flash": takeFlash(w, r)})
 }
 
 // settingsReturn sends a form back to the page it came from. Only these two

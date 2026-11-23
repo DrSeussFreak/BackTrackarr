@@ -54,8 +54,8 @@
   <button type="button" class="level-filter level Advanced" data-filter="Advanced">Advanced</button>
   <span class="muted" id="settings-filter-note" role="status"></span>
 </div>
-<p class="muted small">Only need the basics? Click <b>Essential</b> and fill in what's there. Hidden settings keep their values when you save.</p>
-<form method="post" action="/settings" autocomplete="off" novalidate id="settings-form">
+<p class="muted small">Only need the basics? Click <b>Essential</b> and fill in what's there. Hidden settings keep their values when you save. Each app has a <b>Test</b> button, or see them all on <a href="/connections">Connections</a>.</p>
+<form method="post" action="/settings" autocomplete="off" novalidate id="settings-form" data-probes="{{.ConnProbes}}">
   {{range .Groups}}
   <details class="panel" {{if eq .Name "General"}}open{{end}}>
     <summary><b>{{.Name}}</b>{{with .Help}}<span class="muted small">{{.}}</span>{{end}}</summary>

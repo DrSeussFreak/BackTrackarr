@@ -37,6 +37,57 @@
   buttons.forEach((b) => b.addEventListener("click", () => applyFilter(b.dataset.filter, true)));
   applyFilter(recalled(), false);
 
+  // ---------- connection tests ----------
+  let probes = [];
+  try { probes = JSON.parse(form.dataset.probes || "[]"); } catch { /* no test buttons */ }
+  probes.forEach((p) => {
+    const firstEl = p.keys.map((k) => form.elements.namedItem(k)).find(Boolean);
+    if (!firstEl) return;
+    const cell = firstEl.closest("td");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost conn-inline";
+    button.textContent = "Test " + p.name;
+    const out = document.createElement("div");
+    out.className = "conn-result small";
+    out.setAttribute("role", "status");
+    cell.append(button, out);
+    button.addEventListener("click", async () => {
+      const body = new URLSearchParams({ id: p.id });
+      p.keys.forEach((k) => {
+        const el = form.elements.namedItem(k);
+        if (el && el.value.trim()) body.set(k, el.value.trim());
+      });
+      button.disabled = true;
+      out.dataset.status = "testing";
+      out.textContent = "Testing…";
+      try {
+        const res = await fetch("/connections/test", { method: "POST", credentials: "same-origin", body });
+        if (!res.ok || res.redirected) throw new Error();
+        const r = await res.json();
+        out.dataset.status = r.status;
+        const head = document.createElement("b");
+        head.textContent = r.headline;
+        out.replaceChildren(head);
+        (r.details || []).forEach((d) => {
+          const line = document.createElement("div");
+          line.className = "muted";
+          line.textContent = d;
+          out.append(line);
+        });
+        if (r.fix) {
+          const fix = document.createElement("div");
+          fix.textContent = "How to fix: " + r.fix;
+          out.append(fix);
+        }
+      } catch {
+        out.dataset.status = "fail";
+        out.textContent = "Couldn't run the test. Reload this page and sign in if asked.";
+      }
+      button.disabled = false;
+    });
+  });
+
   // ---------- root folders and quality profiles ----------
   const field = (name) => form.elements.namedItem(name);
 
@@ -85,7 +136,7 @@
       const key = keyEl.value.trim();
       const row = field(prefix + "_ROOT_FOLDER").closest("tr");
       const clear = form.elements.namedItem("clear_" + prefix + "_API_KEY");
-      const hasKey = key || (keyEl.placeholder.includes("set") && !(clear && clear.checked));
+      const hasKey = key || (keyEl.placeholder.startsWith("•") && !(clear && clear.checked));
       if (!url || !hasKey) return;
       const mine = ++seq;
       status(row, "Reading from the app…");
