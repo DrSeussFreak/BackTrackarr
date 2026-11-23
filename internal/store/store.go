@@ -673,6 +673,27 @@ func (s *Store) RetryOutbox(ctx context.Context, id int64, attempts int, next ti
 	return err
 }
 
+// AddSkipped records one play a service can't accept. The same play is only
+// counted once, however many times history is pushed.
+func (s *Store) AddSkipped(ctx context.Context, sink string, ev model.Event, reason string) error {
+	b, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	_, err = s.DB.ExecContext(ctx, `INSERT INTO outbox(sink,action,payload,status,next_at,created_at,done_at,last_error)
+		SELECT ?,?,?,'skipped',?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM outbox WHERE sink=? AND status='skipped' AND payload=?)`,
+		sink, ev.Action, string(b), now, now, now, reason, sink, string(b))
+	return err
+}
+
+// ScrubOutboxErrors clears saved errors that quoted a malformed relay address,
+// which may be a token.
+func (s *Store) ScrubOutboxErrors(ctx context.Context) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE outbox SET last_error=NULL WHERE last_error LIKE '%unsupported protocol scheme%'`)
+	return err
+}
+
 func (s *Store) RetryFailed(ctx context.Context, sink string) (int64, error) {
 	res, err := s.DB.ExecContext(ctx, `UPDATE outbox SET status='pending', done_at=NULL, attempts=0, next_at=? WHERE sink=? AND status='failed'`,
 		time.Now().Unix(), sink)
@@ -685,13 +706,14 @@ func (s *Store) RetryFailed(ctx context.Context, sink string) (int64, error) {
 type SinkStats struct {
 	Pending   int64
 	Failed    int64
+	Skipped   int64
 	Sent      int64
 	LastOK    int64
 	LastError string
 }
 
 func (s *Store) OutboxStats(ctx context.Context) (map[string]*SinkStats, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT sink, COALESCE(SUM(done_at IS NULL),0), COALESCE(SUM(status='failed'),0),
+	rows, err := s.DB.QueryContext(ctx, `SELECT sink, COALESCE(SUM(done_at IS NULL),0), COALESCE(SUM(status='failed'),0), COALESCE(SUM(status='skipped'),0),
 		COALESCE(SUM(status='ok'),0), COALESCE(MAX(CASE WHEN status='ok' THEN done_at END),0) FROM outbox GROUP BY sink`)
 	if err != nil {
 		return nil, err
@@ -700,7 +722,7 @@ func (s *Store) OutboxStats(ctx context.Context) (map[string]*SinkStats, error) 
 	for rows.Next() {
 		var name string
 		st := &SinkStats{}
-		if err := rows.Scan(&name, &st.Pending, &st.Failed, &st.Sent, &st.LastOK); err != nil {
+		if err := rows.Scan(&name, &st.Pending, &st.Failed, &st.Skipped, &st.Sent, &st.LastOK); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -708,7 +730,7 @@ func (s *Store) OutboxStats(ctx context.Context) (map[string]*SinkStats, error) 
 	}
 	rows.Close()
 	for name, st := range out {
-		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(last_error,'') FROM outbox WHERE sink=? AND last_error IS NOT NULL ORDER BY id DESC LIMIT 1`, name).Scan(&st.LastError)
+		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(last_error,'') FROM outbox WHERE sink=? AND last_error IS NOT NULL AND status NOT IN ('skipped','dropped') ORDER BY id DESC LIMIT 1`, name).Scan(&st.LastError)
 	}
 	return out, nil
 }

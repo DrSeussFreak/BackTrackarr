@@ -83,6 +83,12 @@ func Current(s Setting) (value, source string) {
 }
 
 // Validate checks and tidies a submitted value. Empty means "use the default".
+// ValidHTTPURL reports whether v is a full http or https address.
+func ValidHTTPURL(v string) bool {
+	u, err := url.Parse(strings.TrimSpace(v))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
 func Validate(s Setting, v string) (string, error) {
 	v = strings.TrimSpace(v)
 	if strings.ContainsAny(v, "\r\n\x00") {
@@ -90,6 +96,14 @@ func Validate(s Setting, v string) (string, error) {
 	}
 	if v == "" {
 		return "", nil
+	}
+	if s.Key == "RELAY_URLS" || s.Key == "WEBHOOK_URLS" {
+		for _, u := range strings.Split(v, ",") {
+			if u = strings.TrimSpace(u); u != "" && !ValidHTTPURL(u) {
+				// The value may be a token, so it is never repeated here.
+				return "", fmt.Errorf("%s: enter the whole web address, starting with http:// or https://", s.Label)
+			}
+		}
 	}
 	switch s.Type {
 	case "number":
@@ -224,7 +238,7 @@ func buildSettings() {
 	g = "Other destinations"
 	add(g, "FLOPPY_URL", "Floppy address", "url", "", "")
 	add(g, "FLOPPY_TOKEN", "Floppy token", "secret", "", "")
-	add(g, "RELAY_URLS", "Plex webhook relays", "secret", "", "Comma-separated URLs. Hidden because they often contain tokens.")
+	add(g, "RELAY_URLS", "Plex webhook relays", "secret", "", "Full URLs, comma-separated. For CrossWatch, copy its whole Plex webhook URL, ending in /webhook/plexwatcher?token=...")
 	add(g, "WEBHOOK_URLS", "JSON webhooks", "secret", "", "Comma-separated URLs. Hidden because they often contain tokens.")
 
 	g = "Streaming"

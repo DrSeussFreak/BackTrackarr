@@ -265,6 +265,9 @@ func (e *Engine) RunWorker(ctx context.Context) {
 	t := time.NewTimer(2 * time.Second)
 	defer t.Stop()
 	lastMaint := time.Now()
+	if err := e.st.ScrubOutboxErrors(ctx); err != nil {
+		e.log.Warn("outbox", "err", err)
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -308,8 +311,13 @@ func (e *Engine) processOne(ctx context.Context, s sinks.Sink) bool {
 		return false
 	}
 	age := time.Since(time.Unix(row.CreatedAt, 0))
-	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	limit := 60 * time.Second
+	if row.Action == "history" {
+		limit = 5 * time.Minute // a batch is up to 100 separate requests
+	}
+	cctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
+	filter, _ := s.(sinks.MediaFilter)
 
 	var sendErr error
 	if row.Action == "history" {
@@ -317,6 +325,23 @@ func (e *Engine) processOne(ctx context.Context, s sinks.Sink) bool {
 		if err := json.Unmarshal(row.Payload, &evs); err != nil {
 			_ = e.st.FinishOutbox(ctx, row.ID, "failed", err.Error())
 			return true
+		}
+		if filter != nil {
+			keep := evs[:0]
+			for _, ev := range evs {
+				e.refreshIDs(ctx, &ev)
+				if filter.CanSend(ev.Media) {
+					keep = append(keep, ev)
+				} else if err := e.st.AddSkipped(ctx, s.Name(), ev, sinks.NoIDReason); err != nil {
+					e.log.Error("outbox", "err", err)
+					return false
+				}
+			}
+			evs = keep
+			if len(evs) == 0 {
+				_ = e.st.FinishOutbox(ctx, row.ID, "dropped", sinks.NoIDReason)
+				return true
+			}
 		}
 		sendErr = s.SendHistory(cctx, evs)
 	} else {
@@ -329,6 +354,23 @@ func (e *Engine) processOne(ctx context.Context, s sinks.Sink) bool {
 		if live && age > 15*time.Minute {
 			_ = e.st.FinishOutbox(ctx, row.ID, "dropped", "stale live event")
 			return true
+		}
+		// A Plex webhook has no date, so a late one would look like a play
+		// happening now.
+		if s.Kind() == "relay" && age > relayMaxAge {
+			_ = e.st.FinishOutbox(ctx, row.ID, "dropped", "too old to relay")
+			return true
+		}
+		if filter != nil {
+			e.refreshIDs(ctx, &ev)
+			if !filter.CanSend(ev.Media) {
+				status := "dropped" // a live update isn't a play
+				if ev.Action == model.ActWatched {
+					status = "skipped"
+				}
+				_ = e.st.FinishOutbox(ctx, row.ID, status, sinks.NoIDReason)
+				return true
+			}
 		}
 		sendErr = s.Send(cctx, ev)
 	}
@@ -352,6 +394,20 @@ func (e *Engine) processOne(ctx context.Context, s sinks.Sink) bool {
 		_ = e.st.RetryOutbox(ctx, row.ID, row.Attempts+1, time.Now().Add(backoff), sendErr.Error())
 	}
 	return true
+}
+
+// relayMaxAge is how late a Plex webhook may still be forwarded.
+const relayMaxAge = time.Hour
+
+// refreshIDs picks up ids found since the event was queued.
+func (e *Engine) refreshIDs(ctx context.Context, ev *model.Event) {
+	if ev.Media.ID == 0 {
+		return
+	}
+	if m, err := e.st.GetMedia(ctx, ev.Media.ID); err == nil {
+		ev.Media.IDs.Merge(m.IDs)
+		ev.Media.ShowIDs.Merge(m.ShowIDs)
+	}
 }
 
 // ---------- bulk operations ----------

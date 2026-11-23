@@ -316,6 +316,7 @@ type sinkRow struct {
 	Name, Label, Kind string
 	Ready             bool
 	CanAuth           bool
+	Problem           string
 	Stats             *store.SinkStats
 	Auth              *authState
 }
@@ -347,7 +348,14 @@ func (s *Server) syncPage(w http.ResponseWriter, r *http.Request) {
 		if a != nil && !a.Done && a.Err == "" {
 			pending = true
 		}
-		rows = append(rows, sinkRow{Name: sk.Name(), Label: sk.Label(), Kind: sk.Kind(), Ready: sk.Ready(ctx), CanAuth: canAuth, Stats: st, Auth: a})
+		problem := ""
+		if t, ok := sk.(sinks.Troubled); ok {
+			problem = t.Problem()
+		}
+		if problem != "" {
+			st.LastError = "" // an old error can quote the bad value
+		}
+		rows = append(rows, sinkRow{Name: sk.Name(), Label: sk.Label(), Kind: sk.Kind(), Ready: sk.Ready(ctx), CanAuth: canAuth, Problem: problem, Stats: st, Auth: a})
 	}
 	var missing []string
 	for _, k := range []string{"trakt", "simkl", "floppy", "relay"} {

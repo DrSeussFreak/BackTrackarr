@@ -32,6 +32,19 @@ type Sink interface {
 	SendHistory(ctx context.Context, evs []model.Event) error
 }
 
+// MediaFilter is a sink that can only accept titles it can identify.
+type MediaFilter interface {
+	CanSend(m model.Media) bool
+}
+
+// Troubled is a sink whose saved settings can't work.
+type Troubled interface {
+	Problem() string
+}
+
+// NoIDReason is why a play was not sent to a MediaFilter.
+const NoIDReason = "no TMDB, IMDb or TVDB id"
+
 // DeviceCode is a pending device/PIN authorization.
 type DeviceCode struct {
 	DeviceCode      string `json:"device_code"`

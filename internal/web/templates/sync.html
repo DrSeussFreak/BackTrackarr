@@ -21,14 +21,14 @@
       <tr>
         <td><b>{{.Label}}</b><div class="muted mono small">{{.Name}}</div></td>
         <td>
-          {{if .Ready}}<span class="ok">● connected</span>{{else}}<span class="warn">● not connected</span>{{end}}
+          {{if .Problem}}<span class="bad">● address needs fixing</span><div class="muted small">{{.Problem}}</div>{{else if .Ready}}<span class="ok">● connected</span>{{else}}<span class="warn">● not connected</span>{{end}}
           {{with .Auth}}
             {{if .Done}}<div class="ok small">Authorized.</div>
             {{else if .Err}}<div class="bad small">{{.Err}}</div>
             {{else}}<div class="authbox">Go to <a href="{{.Code.VerificationURL}}" target="_blank" rel="noopener">{{.Code.VerificationURL}}</a> and enter <code class="big">{{.Code.UserCode}}</code><div class="muted small">Waiting…</div></div>{{end}}
           {{end}}
         </td>
-        <td class="mono">{{num .Stats.Pending}} pending{{if .Stats.Failed}}<br><span class="bad">{{num .Stats.Failed}} failed</span>{{end}}
+        <td class="mono">{{num .Stats.Pending}} pending{{if .Stats.Failed}}<br><span class="bad">{{num .Stats.Failed}} failed</span>{{end}}{{if .Stats.Skipped}}<br><span class="muted" title="These plays are still saved in BackTrackarr.">{{num .Stats.Skipped}} skipped: no TMDB, IMDb or TVDB id</span>{{end}}
           {{if .Stats.LastError}}<div class="muted small" title="{{.Stats.LastError}}">last error: {{printf "%.80s" .Stats.LastError}}</div>{{end}}</td>
         <td class="mono small">{{ts .Stats.LastOK}}</td>
         <td class="actions">
