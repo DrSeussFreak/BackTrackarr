@@ -17,7 +17,7 @@
   <section class="panel">
     <h2>Import from CLZ Comics</h2>
     <form method="post" action="/comics/import" enctype="multipart/form-data" class="row">
-      <input type="file" name="file" accept=".csv,.txt,.tsv,.xml" required>
+      <input type="file" name="file" accept=".csv,.txt,.tsv,.xml,.json" multiple required>
       <button>Import</button>
     </form>
     <p class="muted small">In CLZ Comics, export your collection to XML, or to CSV/text with the columns you want (Series, Issue, Title, Publisher, Read, Read Date, My Rating…). Every column is kept. Re-importing is safe; a new read date counts as a reread.

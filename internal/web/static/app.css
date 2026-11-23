@@ -155,3 +155,5 @@ details.rule form { padding: 10px 0 4px; }
 .home-bar[hidden] { display: none; }
 @media (max-width: 760px) { .home { grid-template-columns: minmax(0, 1fr); } }
 #home-customize[hidden] { display: none; }
+.dropzone-clear { position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 12px; }
+.dropzone-clear[hidden] { display: none; }

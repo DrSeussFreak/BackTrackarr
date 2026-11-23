@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -78,32 +79,51 @@ func (s *Server) shelfPage(w http.ResponseWriter, r *http.Request, covers string
 
 func (s *Server) shelfImport(w http.ResponseWriter, r *http.Request, covers string) {
 	to := "/" + covers
-	r.Body = http.MaxBytesReader(w, r.Body, 256<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<30)
 	// Keep at most 1 MB of the upload in memory, the rest in a temp file.
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		s.flash(w, r, to, "Upload failed: "+err.Error())
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
-	f, hdr, err := r.FormFile("file")
+	files, done, err := s.formFiles(r)
 	if err != nil {
-		s.flash(w, r, to, "Choose an export file to upload.")
+		s.flash(w, r, to, "Upload failed: "+err.Error())
 		return
 	}
-	defer f.Close()
-	defer debug.FreeOSMemory()
-	var res *core.ShelfImportResult
-	if covers == "games" {
-		res, err = s.eng.ImportGames(r.Context(), f)
-	} else {
-		res, err = s.eng.ImportBooks(r.Context(), f, shelfType(covers, r.FormValue("type")))
-	}
-	if err != nil {
-		s.flash(w, r, to, "Import failed: "+err.Error())
+	mediaType := shelfType(covers, r.FormValue("type"))
+	started := s.eng.Jobs.Start(s.eng.Context(), covers+" import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
+		defer done()
+		defer debug.FreeOSMemory()
+		rows, added, updated, events := 0, 0, 0, 0
+		err := eachUpload(files, report, func(f *os.File, name string) (string, error) {
+			var res *core.ShelfImportResult
+			var err error
+			switch {
+			case covers == "games":
+				res, err = s.eng.ImportGames(ctx, f)
+			case isJSONFile(name):
+				return "", s.importJSON(ctx, f, name, report)
+			default:
+				res, err = s.eng.ImportBooks(ctx, f, mediaType)
+			}
+			if res != nil {
+				rows += res.Rows
+				added += res.New
+				updated += res.Updated
+				events += res.Events
+			}
+			return "", err
+		})
+		report(fmt.Sprintf("%d rows, %d new, %d updated, %d new reads or plays", rows, added, updated, events))
+		return err
+	})
+	if !started {
+		done()
+		s.flash(w, r, to, "That file is already importing.")
 		return
 	}
-	s.flash(w, r, to, fmt.Sprintf("Imported %s as %s: %d rows, %d new, %d updated, %d new reads or plays.",
-		hdr.Filename, res.Source, res.Rows, res.New, res.Updated, res.Events))
+	back(w, r, to)
 }
 
 func (s *Server) shelfSync(w http.ResponseWriter, r *http.Request, covers string) {

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DrSeussFreak/BackTrackarr/internal/config"
 	"github.com/DrSeussFreak/BackTrackarr/internal/core"
@@ -24,7 +25,8 @@ func TestShelfPages(t *testing.T) {
 	defer st.Close()
 	cfg := &config.Config{Shelf: config.ShelfConfig{User: "me", BooksImportDir: "/data/import/books", GamesImportDir: "/data/import/games"}}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := New(cfg, st, core.New(context.Background(), cfg, st, nil, nil, log), log).Handler()
+	eng := core.New(context.Background(), cfg, st, nil, nil, log)
+	h := New(cfg, st, eng, log).Handler()
 
 	get := func(path string) string {
 		t.Helper()
@@ -48,6 +50,13 @@ func TestShelfPages(t *testing.T) {
 		h.ServeHTTP(w, req)
 		if w.Code != http.StatusSeeOther {
 			t.Fatalf("%s: HTTP %d", path, w.Code)
+		}
+		// Imports run as background jobs.
+		for end := time.Now().Add(10 * time.Second); eng.Jobs.AnyRunning(); {
+			if time.Now().After(end) {
+				t.Fatal("import didn't finish")
+			}
+			time.Sleep(5 * time.Millisecond)
 		}
 	}
 

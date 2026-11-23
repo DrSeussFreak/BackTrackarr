@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/DrSeussFreak/BackTrackarr/internal/core"
@@ -37,33 +35,14 @@ func (s *Server) importUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
-	uploads := r.MultipartForm.File["file"]
-	if len(uploads) == 0 {
-		s.flash(w, r, "/import", "Choose a file to import.")
+	files, done, err := s.formFiles(r)
+	if err != nil {
+		s.flash(w, r, "/import", "Upload failed: "+err.Error())
 		return
 	}
-	var files []core.ImportFile
-	drop := func() {
-		for _, f := range files {
-			os.Remove(f.Path)
-		}
-	}
-	for _, hdr := range uploads {
-		p, err := spoolUpload(hdr)
-		if err != nil {
-			drop()
-			s.flash(w, r, "/import", "Upload failed: "+err.Error())
-			return
-		}
-		files = append(files, core.ImportFile{Path: p, Name: hdr.Filename})
-	}
-	label := files[0].Name
-	if len(files) > 1 {
-		label = fmt.Sprintf("%s and %d more", label, len(files)-1)
-	}
 	user := strings.TrimSpace(r.FormValue("user"))
-	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+label, func(ctx context.Context, report func(string)) error {
-		defer drop()
+	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
+		defer done()
 		res, err := s.eng.ImportFiles(ctx, files, user, report)
 		if res != nil {
 			report(res.String())
@@ -71,30 +50,11 @@ func (s *Server) importUpload(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if !started {
-		drop()
+		done()
 		s.flash(w, r, "/import", "That file is already importing.")
 		return
 	}
 	back(w, r, "/import")
-}
-
-func spoolUpload(hdr *multipart.FileHeader) (string, error) {
-	f, err := hdr.Open()
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	spool, err := os.CreateTemp("", "backtrackarr-import-*")
-	if err != nil {
-		return "", err
-	}
-	_, err = io.Copy(spool, f)
-	spool.Close()
-	if err != nil {
-		os.Remove(spool.Name())
-		return "", err
-	}
-	return spool.Name(), nil
 }
 
 // apiBrowserHistory receives rows the browser script read from a signed-in

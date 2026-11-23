@@ -129,7 +129,7 @@ func (s *Server) streamingPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) streamingImport(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 256<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<30)
 	// Spool to disk: the import runs after this request, and a large export
 	// shouldn't sit in memory.
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
@@ -137,20 +137,8 @@ func (s *Server) streamingImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
-	f, hdr, err := r.FormFile("file")
+	files, done, err := s.formFiles(r)
 	if err != nil {
-		s.flash(w, r, "/streaming", "Choose an export file to upload.")
-		return
-	}
-	defer f.Close()
-	spool, err := os.CreateTemp("", "backtrackarr-import-*")
-	if err != nil {
-		s.flash(w, r, "/streaming", "Upload failed: "+err.Error())
-		return
-	}
-	if _, err := io.Copy(spool, f); err != nil {
-		spool.Close()
-		os.Remove(spool.Name())
 		s.flash(w, r, "/streaming", "Upload failed: "+err.Error())
 		return
 	}
@@ -159,32 +147,27 @@ func (s *Server) streamingImport(w http.ResponseWriter, r *http.Request) {
 	if opt.Service == "auto" {
 		opt.Service = ""
 	}
-	name := hdr.Filename
-	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+name, func(ctx context.Context, report func(string)) error {
-		defer os.Remove(spool.Name())
-		defer spool.Close()
+	started := s.eng.Jobs.Start(s.eng.Context(), "import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
+		defer done()
 		defer debug.FreeOSMemory()
-		if _, err := spool.Seek(0, io.SeekStart); err != nil {
-			return err
-		}
-		res, err := s.eng.ImportStreaming(ctx, spool, opt, report)
-		if err != nil {
-			return err
-		}
-		msg := fmt.Sprintf("%s: %d rows, %d new plays, %d already there, %d skipped (trailers, previews, unreadable)",
-			res.Service, res.Rows, res.Added, res.Duplicates, res.Skipped)
-		if res.Unmatched > 0 {
-			msg += fmt.Sprintf(", %d without ids", res.Unmatched)
-		}
-		if len(res.Profiles) > 1 && opt.Profile == "" && opt.User == "" {
-			msg += fmt.Sprintf("; profiles were kept as users: %s", strings.Join(res.Profiles, ", "))
-		}
-		report(msg)
-		return nil
+		return eachUpload(files, report, func(f *os.File, name string) (string, error) {
+			res, err := s.eng.ImportStreaming(ctx, f, opt, report)
+			if err != nil {
+				return "", err
+			}
+			msg := fmt.Sprintf("%s: %d rows, %d new plays, %d already there, %d skipped (trailers, previews, unreadable)",
+				res.Service, res.Rows, res.Added, res.Duplicates, res.Skipped)
+			if res.Unmatched > 0 {
+				msg += fmt.Sprintf(", %d without ids", res.Unmatched)
+			}
+			if len(res.Profiles) > 1 && opt.Profile == "" && opt.User == "" {
+				msg += fmt.Sprintf("; profiles were kept as users: %s", strings.Join(res.Profiles, ", "))
+			}
+			return msg, nil
+		})
 	})
 	if !started { // the same file is already importing
-		spool.Close()
-		os.Remove(spool.Name())
+		done()
 	}
 	back(w, r, "/streaming")
 }

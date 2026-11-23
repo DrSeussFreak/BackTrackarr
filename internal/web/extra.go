@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -294,45 +293,37 @@ func (s *Server) comicsPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) comicsImport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 2<<30)
 	if err := r.ParseMultipartForm(1 << 20); err != nil { // the rest goes to a temp file
-		s.flash(w, r, "/comics", "Upload failed. Choose a CLZ file under 2 GB.")
+		s.flash(w, r, "/comics", "Upload failed. Choose CLZ files under 2 GB.")
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
-	f, hdr, err := r.FormFile("file")
+	files, done, err := s.formFiles(r)
 	if err != nil {
-		s.flash(w, r, "/comics", "Choose a CLZ CSV or XML export to upload.")
-		return
-	}
-	defer f.Close()
-	spool, err := os.CreateTemp("", "backtrackarr-clz-*")
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	_, err = io.Copy(spool, f)
-	spool.Close()
-	if err != nil {
-		os.Remove(spool.Name())
 		s.flash(w, r, "/comics", "Upload failed: "+err.Error())
 		return
 	}
 	// A big file outlives the browser request, so it runs as a job.
-	name, p := hdr.Filename, spool.Name()
-	started := s.eng.Jobs.Start(s.eng.Context(), "CLZ import ← "+name, func(ctx context.Context, report func(string)) error {
-		defer os.Remove(p)
-		in, err := os.Open(p)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		res, err := s.eng.ImportCLZProgress(ctx, in, "clz:"+name, report)
-		if res != nil {
-			report(fmt.Sprintf("%d comics, %d new, %d updated, %d new reads", res.Rows, res.New, res.Updated, res.Reads))
-		}
+	started := s.eng.Jobs.Start(s.eng.Context(), "CLZ import ← "+uploadLabel(files), func(ctx context.Context, report func(string)) error {
+		defer done()
+		var total core.ClzResult
+		err := eachUpload(files, report, func(f *os.File, name string) (string, error) {
+			if isJSONFile(name) {
+				return "", s.importJSON(ctx, f, name, report)
+			}
+			res, err := s.eng.ImportCLZProgress(ctx, f, "clz:"+name, report)
+			if res != nil {
+				total.Rows += res.Rows
+				total.New += res.New
+				total.Updated += res.Updated
+				total.Reads += res.Reads
+			}
+			return "", err
+		})
+		report(fmt.Sprintf("%d comics, %d new, %d updated, %d new reads", total.Rows, total.New, total.Updated, total.Reads))
 		return err
 	})
 	if !started {
-		os.Remove(p)
+		done()
 		s.flash(w, r, "/comics", "That file is already importing.")
 		return
 	}

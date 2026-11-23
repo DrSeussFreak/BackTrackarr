@@ -33,7 +33,7 @@
     {{else}}<p class="muted">No sources connected. Add them on the <a href="/settings">Settings</a> page.</p>{{end}}
     <h2>Import an export</h2>
     <form method="post" action="{{.Path}}/import" enctype="multipart/form-data" class="row">
-      <input type="file" name="file" accept=".csv,.tsv,.txt{{if .IsGames}},.json{{end}}" required>
+      <input type="file" name="file" accept=".csv,.tsv,.txt,.json" multiple required>
       {{if not .IsGames}}<select name="type" aria-label="Import as"><option value="">Detect type</option><option value="book">All books</option><option value="audiobook">All audiobooks</option></select>{{end}}
       <button>Import</button>
     </form>

@@ -57,6 +57,7 @@ type Server struct {
 	restartOnce sync.Once
 	// Throttle paces outbound requests. Set by main, nil in tests.
 	Throttle *throttle.Transport
+	uploads  uploads
 }
 
 var funcs = template.FuncMap{
@@ -148,6 +149,7 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("POST /home/layout", s.homeSave)
 	admin.HandleFunc("POST /home/layout/reset", s.homeReset)
 	admin.HandleFunc("POST /import/everything", s.importEverything)
+	admin.HandleFunc("POST /upload/chunk", s.uploadChunk)
 	admin.HandleFunc("GET /history", s.history)
 	admin.HandleFunc("POST /plays/{id}/delete", s.deletePlay)
 	admin.HandleFunc("GET /sync", s.syncPage)
