@@ -41,7 +41,7 @@ func (s *Server) apiNowPlaying(w http.ResponseWriter, r *http.Request) {
 // apiEndSession stops a Plex stream and removes it from Now Playing. Sources
 // BackTrackarr can't control are only removed from the list.
 func (s *Server) apiEndSession(w http.ResponseWriter, r *http.Request) {
-	res, err := s.eng.EndPlayback(r.Context(), r.FormValue("key"))
+	res, err := s.eng.EndPlayback(r.Context(), r.FormValue("key"), r.FormValue("message"))
 	var shown core.EndPlaybackError
 	if errors.As(err, &shown) {
 		jsonError(w, http.StatusBadGateway, shown.Error())

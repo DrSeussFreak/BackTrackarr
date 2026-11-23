@@ -46,21 +46,77 @@
     return el;
   }
 
+  // Resolves with the message to send ("" for the default), or null if cancelled.
+  function askToEnd(p, who) {
+    return new Promise((resolve) => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "np-dialog";
+      const form = document.createElement("form");
+      form.method = "dialog";
+      const heading = document.createElement("h2");
+      heading.textContent = p.can_stop ? "Stop playback?" : "Remove from Now playing?";
+      const what = document.createElement("p");
+      what.textContent = p.display + (who ? " · " + who : "");
+      form.append(heading, what);
+
+      let input = null;
+      if (p.can_stop) {
+        const label = document.createElement("label");
+        label.textContent = "Message to show in Plex (optional)";
+        input = document.createElement("input");
+        input.type = "text";
+        input.maxLength = 200;
+        input.placeholder = "Stopped from BackTrackarr";
+        input.autocomplete = "off";
+        label.append(input);
+        form.append(label);
+      } else {
+        const note = document.createElement("p");
+        note.className = "muted small";
+        note.textContent = "BackTrackarr can't stop playback on " + (p.source || "this source") + ".";
+        form.append(note);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "np-dialog-actions";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "ghost";
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", () => dialog.close("cancel"));
+      const go = document.createElement("button");
+      go.type = "submit";
+      go.value = "end";
+      go.textContent = p.can_stop ? "Stop playback" : "Remove";
+      actions.append(cancel, go);
+      form.append(actions);
+      dialog.append(form);
+      dialog.addEventListener("close", () => {
+        resolve(dialog.returnValue === "end" ? (input ? input.value.trim() : "") : null);
+        dialog.remove();
+      });
+      document.body.append(dialog);
+      dialog.showModal();
+      if (input) input.focus();
+    });
+  }
+
   async function endSession(p, button) {
     const who = [p.user, p.player].filter(Boolean).join(" on ");
-    const ask = p.can_stop
-      ? "Stop " + p.display + (who ? " for " + who : "") + "?\n\nThis stops playback in Plex right away."
-      : "Remove " + p.display + " from Now playing?\n\nBackTrackarr can't stop playback on " + (p.source || "this source") + ".";
-    if (!confirm(ask)) return;
+    busy = true; // keeps this row in place while the dialog is open
+    const message = await askToEnd(p, who);
+    if (message === null) {
+      busy = false;
+      return;
+    }
     button.disabled = true;
     button.textContent = "Ending…";
-    busy = true;
     let problem = "";
     try {
       const res = await fetch("/api/now-playing/end", {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ key: p.key }),
+        body: new URLSearchParams({ key: p.key, message }),
       });
       if (!res.ok && res.status !== 404) {
         const body = await res.json().catch(() => ({}));

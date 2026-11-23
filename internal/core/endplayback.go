@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode"
 
 	"github.com/DrSeussFreak/BackTrackarr/internal/plex"
 	"github.com/DrSeussFreak/BackTrackarr/internal/store"
@@ -25,11 +26,27 @@ func (e *Engine) CanStopPlayback(source string) bool {
 	return e.plex != nil && strings.HasPrefix(source, "plex") && source != plexMarkSource
 }
 
+// MaxStopMessage is the longest message shown on a player when it's stopped.
+const MaxStopMessage = 200
+
+// stopMessage cleans what the user typed: one line, a sensible length, and a
+// default when it's blank.
+func stopMessage(v string) string {
+	v = strings.Join(strings.FieldsFunc(v, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }), " ")
+	if r := []rune(v); len(r) > MaxStopMessage {
+		v = strings.TrimSpace(string(r[:MaxStopMessage]))
+	}
+	if v == "" {
+		return "Stopped from BackTrackarr"
+	}
+	return v
+}
+
 // EndPlayback stops one Plex stream and takes it off Now Playing. Other
 // sources can only be removed from the list. If Plex can't stop it, the
 // session stays showing so the screen never claims something that didn't
 // happen.
-func (e *Engine) EndPlayback(ctx context.Context, key string) (EndResult, error) {
+func (e *Engine) EndPlayback(ctx context.Context, key, message string) (EndResult, error) {
 	var row *store.PlexSession
 	if e.plex != nil {
 		rows, err := e.st.PlexSessions(ctx)
@@ -76,7 +93,7 @@ func (e *Engine) EndPlayback(ctx context.Context, key string) (EndResult, error)
 		return EndResult{Found: true}, EndPlaybackError("Plex didn't give an ID for this stream, so it can't be stopped from here.")
 	}
 
-	if err := e.plex.TerminateSession(ctx, matches[0].Session.ID, "Stopped from BackTrackarr"); err != nil {
+	if err := e.plex.TerminateSession(ctx, matches[0].Session.ID, stopMessage(message)); err != nil {
 		e.log.Warn("couldn't stop a Plex stream", "err", err)
 		if errors.Is(err, plex.ErrUnauthorized) {
 			return EndResult{Found: true}, EndPlaybackError("Plex refused. Stopping streams needs Plex Pass and the server owner's sign-in.")

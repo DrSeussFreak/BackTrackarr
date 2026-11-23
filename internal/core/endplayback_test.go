@@ -66,7 +66,7 @@ func TestEndPlaybackStopsOnlyThatStream(t *testing.T) {
 	row := showing(t, st)["Target"]
 	f.items = []map[string]any{stream("7", "Office", "Alex", "other-player"), stream("7", "Den", "Sam", "other-user"), stream("7", "Den", "Alex", "right-one")}
 
-	res, err := e.EndPlayback(ctx, row.Key)
+	res, err := e.EndPlayback(ctx, row.Key, "")
 	if err != nil || !res.Stopped {
 		t.Fatalf("result %+v err %v", res, err)
 	}
@@ -85,7 +85,7 @@ func TestEndPlaybackKeepsRowWhenPlexRefuses(t *testing.T) {
 	f.items = []map[string]any{stream("7", "Den", "Alex", "right-one")}
 	f.status = http.StatusForbidden
 
-	_, err := e.EndPlayback(context.Background(), row.Key)
+	_, err := e.EndPlayback(context.Background(), row.Key, "")
 	var shown EndPlaybackError
 	if !errors.As(err, &shown) {
 		t.Fatalf("expected a message for the user, got %v", err)
@@ -100,7 +100,7 @@ func TestEndPlaybackRefusesAmbiguousStream(t *testing.T) {
 	startEp(t, e, "7", "Target", "Den", "plex-webhook", model.ActStart)
 	row := showing(t, st)["Target"]
 	f.items = []map[string]any{stream("7", "Den", "Alex", "one"), stream("7", "Den", "Alex", "two")}
-	if _, err := e.EndPlayback(context.Background(), row.Key); err == nil {
+	if _, err := e.EndPlayback(context.Background(), row.Key, ""); err == nil {
 		t.Fatal("two matching streams must not be guessed between")
 	}
 	if len(f.terminated) != 0 {
@@ -115,7 +115,7 @@ func TestEndPlaybackNonPlexOnlyClearsRow(t *testing.T) {
 	if e.CanStopPlayback(row.Source) {
 		t.Fatal("non-Plex sources can't be stopped")
 	}
-	res, err := e.EndPlayback(context.Background(), row.Key)
+	res, err := e.EndPlayback(context.Background(), row.Key, "")
 	if err != nil || !res.Found || res.Stopped || len(f.terminated) != 0 {
 		t.Fatalf("result %+v err %v stopped %v", res, err, f.terminated)
 	}
