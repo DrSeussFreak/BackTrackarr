@@ -169,7 +169,7 @@ func testOldName(t *testing.T, oldName string) {
 // must open and keep every row.
 func TestMigrateFromV1(t *testing.T) {
 	dir := t.TempDir()
-	raw, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "backtrackarr.db"))
+	raw, err := sql.Open("sqlite3", "file:"+filepath.Join(dir, "backtrackarr.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +228,7 @@ func TestBackupIncludesSettingsAndPassesCheck(t *testing.T) {
 	if err := checkSnapshot(ctx, name); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite", "file:"+name+"?mode=ro")
+	db, err := sql.Open("sqlite3", "file:"+name+"?mode=ro")
 	if err != nil {
 		t.Fatal(err)
 	}

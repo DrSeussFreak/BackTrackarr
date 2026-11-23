@@ -199,6 +199,9 @@ func buildSettings() {
 		if key == "LOG_LEVEL" {
 			s.Options = []string{"debug", "info", "warn", "error"}
 		}
+		if key == "BACKUP_EVERY" {
+			s.Options = BackupEveryOptions
+		}
 		settingsList = append(settingsList, s)
 	}
 	g := "General"
@@ -256,8 +259,15 @@ func buildSettings() {
 
 	g = "Comics and backups"
 	add(g, "CLZ_IMPORT_DIR", "CLZ import folder", "text", "", "Blank uses import/clz in the data folder.")
-	add(g, "BACKUP_KEEP", "Daily backups to keep", "number", "7", "0 turns backups off.")
-	add(g, "BACKUP_COMPRESS", "Compress backups", "bool", "true", "")
+	add(g, "BACKUP_EVERY", "Back up every", "choice", DefaultBackupEvery, "")
+	add(g, "BACKUP_KEEP", "Backups to keep", "number", "7", "0 turns backups off.")
+	add(g, "BACKUP_COMPRESS", "Compress backups", "bool", "true", "Encrypted backups can't be compressed.")
+
+	g = "Google Drive backups"
+	add(g, "GDRIVE_CLIENT_ID", "Google client ID", "text", "", "From a TVs and Limited Input client.")
+	add(g, "GDRIVE_CLIENT_SECRET", "Google client secret", "secret", "", "")
+	add(g, "GDRIVE_FOLDER", "Drive folder", "text", "BackTrackarr Backups", "")
+	add(g, "GDRIVE_KEEP", "Backups to keep in Drive", "number", "7", "Older ones go to Drive's trash. 0 keeps all.")
 
 	g = "History imports"
 	add(g, "TAUTULLI_URL", "Tautulli address", "url", "", "")

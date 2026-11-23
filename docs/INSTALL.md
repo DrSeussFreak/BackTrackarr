@@ -309,10 +309,36 @@ automatically.
 
 ## Backups
 
-A compressed snapshot is written to the data folder's `backups/` every day.
-The last 7 are kept (`BACKUP_KEEP`). To restore one, stop BackTrackarr,
+A compressed snapshot is written to the data folder's `backups/` every day,
+and the last 7 are kept. Change both in Settings (`BACKUP_EVERY`, `BACKUP_KEEP`). To restore one, stop BackTrackarr,
 unzip it (`gunzip backtrackarr-….db.gz`), and put it in place as
 `backtrackarr.db`.
+
+
+## Encryption and Google Drive backups
+
+Turn this on from **Security > Encryption and backups**, which has the exact
+steps. In short: create a key file outside the data volume, mount it read-only,
+and set `ENCRYPTION_KEY_FILE`. On the next start BackTrackarr makes an encrypted
+copy, checks every table, and then switches to it.
+
+- **Save the recovery key** the page shows. If you lose both it and the key
+  file, your database and backups can't be opened by anyone.
+- The database, its write-ahead log, SQLite temp files and backups are
+  encrypted (AES-256-XTS on disk, AES-256-GCM for backups). Uploads wait
+  briefly in the data folder as plain files while they import.
+- The original stays as `backtrackarr.db.unencrypted` until you delete it on
+  that page, after an encrypted backup passes its check.
+- **Google Drive** receives only encrypted backups. It uses your own Google
+  client and the `drive.file` scope, so the app sees only files it created.
+
+To restore on a new server, into an empty data folder:
+
+```bash
+docker run --rm -v backtrackarr-data:/data -v /opt/backtrackarr-secrets/backtrackarr.key:/run/secrets/backtrackarr.key:ro -e ENCRYPTION_KEY_FILE=/run/secrets/backtrackarr.key -e RECOVERY_KEY ghcr.io/drseussfreak/backtrackarr:latest restore /data/backups/YOUR-BACKUP.btbak
+```
+
+`RECOVERY_KEY` is needed only if the key file is new.
 
 ## HTTPS and passkeys
 

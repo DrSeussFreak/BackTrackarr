@@ -45,6 +45,14 @@ type Config struct {
 
 	BackupKeep     int
 	BackupCompress bool
+	BackupEvery    string // one of BackupEveryOptions
+
+	// Read only from the environment: it's needed before the database opens.
+	EncryptionKeyFile string
+	DriveClientID     string
+	DriveClientSecret string
+	DriveFolder       string
+	DriveKeep         int
 
 	// Plex archive and tools. BackTrackarr only reads from Plex unless PlexAllowWrites.
 	PlexAllowWrites  bool
@@ -203,7 +211,13 @@ func Load() *Config {
 		RelayURLs:         list("RELAY_URLS"),
 		WebhookURLs:       list("WEBHOOK_URLS"),
 		BackupKeep:        envInt("BACKUP_KEEP", 7),
+		BackupEvery:       env("BACKUP_EVERY", DefaultBackupEvery),
 		BackupCompress:    envBool("BACKUP_COMPRESS", true),
+		EncryptionKeyFile: strings.TrimSpace(os.Getenv("ENCRYPTION_KEY_FILE")),
+		DriveClientID:     env("GDRIVE_CLIENT_ID", ""),
+		DriveClientSecret: env("GDRIVE_CLIENT_SECRET", ""),
+		DriveFolder:       env("GDRIVE_FOLDER", "BackTrackarr Backups"),
+		DriveKeep:         envInt("GDRIVE_KEEP", 7),
 		PlexAllowWrites:   envBool("PLEX_ALLOW_WRITES", false),
 		PlexArchiveEvery:  time.Duration(envInt("PLEX_ARCHIVE_MINUTES", 60)) * time.Minute,
 		PlexWatchScan:     time.Duration(envInt("PLEX_WATCH_SCAN_SECONDS", 300)) * time.Second,
@@ -407,4 +421,24 @@ func (c *Config) FinishPercent(kind string) float64 {
 		return 90
 	}
 	return v
+}
+
+// DefaultBackupEvery is how often backups run unless changed.
+const DefaultBackupEvery = "1 day"
+
+// BackupEveryOptions are the choices in Settings, shortest first.
+var BackupEveryOptions = []string{"1 hour", "6 hours", "12 hours", "1 day", "2 days", "3 days", "1 week", "2 weeks", "30 days"}
+
+var backupEveryTimes = map[string]time.Duration{
+	"1 hour": time.Hour, "6 hours": 6 * time.Hour, "12 hours": 12 * time.Hour,
+	"1 day": 24 * time.Hour, "2 days": 48 * time.Hour, "3 days": 72 * time.Hour,
+	"1 week": 7 * 24 * time.Hour, "2 weeks": 14 * 24 * time.Hour, "30 days": 30 * 24 * time.Hour,
+}
+
+// BackupInterval is the time between backups. An unknown value means 1 day.
+func (c *Config) BackupInterval() time.Duration {
+	if d, ok := backupEveryTimes[c.BackupEvery]; ok {
+		return d
+	}
+	return 24 * time.Hour
 }

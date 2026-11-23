@@ -25,9 +25,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	_ "modernc.org/sqlite" // pure Go, no CGO
+	_ "github.com/ncruces/go-sqlite3/driver" // pure Go, no CGO
+	_ "github.com/ncruces/go-sqlite3/vfs/xts"
 
 	"github.com/DrSeussFreak/BackTrackarr/internal/model"
+	"github.com/DrSeussFreak/BackTrackarr/internal/vault"
 )
 
 //go:embed schema.sql
@@ -40,6 +42,7 @@ const dedupeWindow = 3 * 60 * 60
 type Store struct {
 	DB  *sql.DB
 	dir string
+	enc *Encryption // nil when encryption is off
 
 	// gen counts writes to plays and media. Stats results are cached per user
 	// and reused until gen changes, so dashboard loads stay cheap on large
@@ -63,7 +66,11 @@ type cachedStats struct {
 	st   *Stats
 }
 
-func Open(dir string) (*Store, error) {
+// Open opens an unencrypted database.
+func Open(dir string) (*Store, error) { return OpenWith(dir, nil) }
+
+// OpenWith opens the database, using the unlocked vault if there is one.
+func OpenWith(dir string, enc *Encryption) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -75,15 +82,33 @@ func Open(dir string) (*Store, error) {
 	}
 	probe.Close()
 	os.Remove(probe.Name())
-	path := filepath.Join(dir, "backtrackarr.db")
+	path := filepath.Join(dir, dbFileName)
 	migrateOldName(dir, path)
-	dsn := "file:" + path + "?_txlock=immediate" +
-		"&_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
-		"&_pragma=foreign_keys(ON)&_pragma=cache_size(-4000)&_pragma=temp_store(FILE)&_pragma=soft_heap_limit(33554432)" +
-		"&_pragma=journal_size_limit(67108864)&_pragma=wal_autocheckpoint(2000)"
-	db, err := sql.Open("sqlite", dsn)
+	var key []byte
+	if enc != nil {
+		key = enc.Key
+	}
+	db, err := openDB(path, key)
 	if err != nil {
 		return nil, err
+	}
+	return &Store{DB: db, dir: dir, enc: enc, CompressBackups: true}, nil
+}
+
+const dbParams = "_txlock=immediate" +
+	"&_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
+	"&_pragma=foreign_keys(ON)&_pragma=cache_size(-4000)&_pragma=temp_store(FILE)&_pragma=soft_heap_limit(33554432)" +
+	"&_pragma=journal_size_limit(67108864)&_pragma=wal_autocheckpoint(2000)"
+
+// openDB opens a database file and brings its schema up to date.
+func openDB(path string, key []byte) (*sql.DB, error) {
+	dsn, err := sqliteDSN(path, key, dbParams)
+	if err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return nil, errors.New("couldn't open the database")
 	}
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(4)
@@ -104,7 +129,7 @@ func Open(dir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{DB: db, dir: dir, CompressBackups: true}, nil
+	return db, nil
 }
 
 func (s *Store) Close() error { return s.DB.Close() }
@@ -822,16 +847,34 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 	tmp := name + ".partial"
 	os.Remove(tmp)
 	_, _ = s.DB.ExecContext(ctx, `PRAGMA optimize`) // keeps query plans good as tables grow
-	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, tmp); err != nil {
-		os.Remove(tmp)
-		return "", err
+	var key []byte
+	target := tmp
+	if s.enc != nil {
+		key = s.enc.Key
+		var err error
+		if target, err = sqliteDSN(tmp, key, ""); err != nil {
+			return "", err
+		}
+	}
+	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, target); err != nil {
+		removeDBFiles(tmp)
+		return "", errors.New("couldn't write the backup; check free disk space")
 	}
 	// A damaged snapshot must never rotate a good one out.
-	if err := checkSnapshot(ctx, tmp); err != nil {
-		os.Remove(tmp)
+	if err := checkSnapshotKey(ctx, tmp, key); err != nil {
+		removeDBFiles(tmp)
 		return "", fmt.Errorf("backup failed its integrity check: %w", err)
 	}
-	if s.CompressBackups {
+	if s.enc != nil {
+		// Encrypted data doesn't compress, so it is sealed as it is.
+		sealed := strings.TrimSuffix(name, ".db") + ".btbak"
+		err := vault.SealFile(tmp, sealed, s.enc.Vault, key)
+		removeDBFiles(tmp)
+		if err != nil {
+			return "", err
+		}
+		name = sealed
+	} else if s.CompressBackups {
 		if err := gzipFile(tmp, name+".gz"); err != nil {
 			os.Remove(tmp)
 			return "", err
@@ -845,6 +888,8 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 		files, _ := filepath.Glob(filepath.Join(dir, "backtrackarr-*.db"))
 		gz, _ := filepath.Glob(filepath.Join(dir, "backtrackarr-*.db.gz"))
 		files = append(files, gz...)
+		sealed, _ := filepath.Glob(filepath.Join(dir, "backtrackarr-*.btbak"))
+		files = append(files, sealed...)
 		sort.Strings(files)
 		for len(files) > keep {
 			os.Remove(files[0])
@@ -856,9 +901,17 @@ func (s *Store) Backup(ctx context.Context, keep int) (string, error) {
 
 // checkSnapshot runs SQLite's integrity check on a finished backup.
 func checkSnapshot(ctx context.Context, path string) error {
-	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	return checkSnapshotKey(ctx, path, nil)
+}
+
+func checkSnapshotKey(ctx context.Context, path string, key []byte) error {
+	dsn, err := sqliteDSN(path, key, "mode=ro")
 	if err != nil {
 		return err
+	}
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return errors.New("couldn't open the snapshot")
 	}
 	defer db.Close()
 	var res string

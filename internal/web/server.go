@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -123,7 +124,7 @@ func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger
 		fm[k] = v
 	}
 	fm["mine"] = eng.IsMyService
-	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security"} {
+	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security", "encryption"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
 	return s
@@ -495,13 +496,13 @@ func (s *Server) importTrakt(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) backup(w http.ResponseWriter, r *http.Request) {
 	s.eng.Jobs.Start(s.eng.Context(), "backup", func(ctx context.Context, report func(string)) error {
-		name, err := s.st.Backup(ctx, s.cfg.BackupKeep)
-		if err == nil {
-			report("wrote " + name)
-		}
-		return err
+		return s.eng.BackupNow(ctx, report)
 	})
-	back(w, r, "/sync")
+	to := "/sync"
+	if u, err := url.Parse(r.Referer()); err == nil && u.Path == "/encryption" {
+		to = "/encryption"
+	}
+	back(w, r, to)
 }
 
 // ---------- JSON API ----------

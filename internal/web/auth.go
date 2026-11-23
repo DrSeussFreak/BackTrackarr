@@ -602,6 +602,7 @@ func (s *Server) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 // ---------- Security page ----------
 
 func (s *Server) routesSecurity(admin *http.ServeMux) {
+	s.routesEncryption(admin)
 	admin.HandleFunc("GET /security", s.securityPage)
 	admin.HandleFunc("POST /security/totp/start", s.totpStart)
 	admin.HandleFunc("POST /security/totp/confirm", s.totpConfirm)

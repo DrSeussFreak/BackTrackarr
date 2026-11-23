@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"modernc.org/sqlite"
+	"github.com/ncruces/go-sqlite3"
 )
 
 // querier is what *sql.DB and *sql.Tx have in common.
@@ -65,6 +65,5 @@ func (s *Store) begin(ctx context.Context) (*sql.Tx, error) {
 }
 
 func isBusy(err error) bool {
-	var se *sqlite.Error
-	return errors.As(err, &se) && se.Code()&0xff == 5 // SQLITE_BUSY and its variants
+	return errors.Is(err, sqlite3.BUSY) // includes its extended codes
 }

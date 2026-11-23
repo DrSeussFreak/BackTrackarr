@@ -63,9 +63,14 @@ var settingInfo = map[string]Info{
 	"GEMINI_MODEL":      {"Which Gemini model to use.", "Nothing. Leave the default.", advanced},
 	"AI_INCLUDE_ADULT":  {"Ticks Include adult by default.", "Using private-library plays in recommendations.", optional},
 
-	"CLZ_IMPORT_DIR":  {"A folder watched for CLZ Comics exports.", "Automatic imports. Skip if you upload on the page.", advanced},
-	"BACKUP_KEEP":     {"How many daily database backups to keep.", "Recovering from a mistake or failed disk. Keep this above 0.", recommended},
-	"BACKUP_COMPRESS": {"Shrinks backups to save disk space.", "Nothing. Leave it on.", advanced},
+	"CLZ_IMPORT_DIR":       {"A folder watched for CLZ Comics exports.", "Automatic imports. Skip if you upload on the page.", advanced},
+	"BACKUP_EVERY":         {"How often a database backup is made.", "Recovering from a mistake or failed disk.", recommended},
+	"BACKUP_KEEP":          {"How many database backups to keep on this server.", "Recovering from a mistake or failed disk. Keep this above 0.", recommended},
+	"BACKUP_COMPRESS":      {"Shrinks backups to save disk space.", "Nothing. Leave it on.", advanced},
+	"GDRIVE_CLIENT_ID":     {"Identifies your own Google app for Drive backups.", "Encrypted backups in Google Drive.", optional},
+	"GDRIVE_CLIENT_SECRET": {"The secret for that Google app.", "Encrypted backups in Google Drive.", optional},
+	"GDRIVE_FOLDER":        {"The Drive folder that holds your backups.", "Nothing. The default is fine.", advanced},
+	"GDRIVE_KEEP":          {"How many backups stay in Drive.", "Limiting the space backups use in Drive.", advanced},
 
 	"ARR_ARCHIVE_HOURS": {"How often Sonarr, Radarr and Whisparr are backed up.", "Their library and settings archive.", optional},
 
@@ -111,6 +116,7 @@ var GroupHelp = map[string]string{
 	"Streaming":                "Add a TMDB key if you import streaming history. The rest is optional.",
 	"AI recommendations":       "Skip unless you want the For you page.",
 	"Comics and backups":       "The defaults are fine.",
+	"Google Drive backups":     "Skip unless you want encrypted off-site backups. Start on the Encryption page.",
 	"History imports":          "Skip unless you want history from Tautulli, CrossWatch or Plekt. Floppy uses its own section.",
 	"Requests":                 "Skip unless you use Jellyseerr or Overseerr.",
 	"Books and audiobooks":     "Fill in only the services you use.",

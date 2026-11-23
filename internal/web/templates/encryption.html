@@ -1,0 +1,84 @@
+{{define "content"}}
+<div class="head"><h1>Encryption and backups</h1><a class="btn ghost" href="/security">Back to Security</a></div>
+
+{{if .Recovery}}
+<section class="panel" id="recovery">
+  <h2>Save your recovery key now</h2>
+  <p>If you lose your key file, this is the <b>only</b> way to open your database and backups. Nobody can recover it for you.</p>
+  <p><code class="copy big">{{.Recovery}}</code></p>
+  <p class="muted small">Store it in a password manager, away from this server.</p>
+  <form method="post" action="/encryption/recovery-saved" class="row">
+    <label class="check"><input type="checkbox" name="saved" value="1" required> I saved it somewhere safe</label>
+    <button>Remove it from this app</button>
+  </form>
+</section>
+{{end}}
+
+<section class="panel">
+  <h2>Data at rest</h2>
+  {{if .On}}
+    <p><span class="ok">● Encrypted.</span> Your database and backups are unreadable without your key file or recovery key.</p>
+    <p class="muted small">Uploads wait briefly in the data folder's temp space while they import, then are deleted. Passwords and keys in your Portainer stack are stored by Portainer, so move them into Settings and remove them from the stack.</p>
+  {{else}}
+    <p><span class="warn">● Not encrypted.</span> Anyone who gets your data volume can read it.</p>
+    <ol class="small">
+      <li>On the server, make a key outside the data volume:
+        <pre><code>sudo mkdir -p /opt/backtrackarr-secrets
+openssl rand -hex 32 | sudo tee /opt/backtrackarr-secrets/backtrackarr.key &gt; /dev/null
+sudo chown 65532:65532 /opt/backtrackarr-secrets/backtrackarr.key
+sudo chmod 400 /opt/backtrackarr-secrets/backtrackarr.key</code></pre></li>
+      <li>In your stack, add this to the app's <code>volumes</code>:
+        <pre><code>- /opt/backtrackarr-secrets/backtrackarr.key:/run/secrets/backtrackarr.key:ro</code></pre></li>
+      <li>Add this to its <code>environment</code>, then update the stack:
+        <pre><code>ENCRYPTION_KEY_FILE: "/run/secrets/backtrackarr.key"</code></pre></li>
+      <li>Come back here and save the recovery key.</li>
+    </ol>
+  {{end}}
+</section>
+
+{{if and .On .Plain}}
+<section class="panel">
+  <h2>Unencrypted copies</h2>
+  <p>{{.Plain}} file{{if ne .Plain 1}}s{{end}} from before encryption {{if eq .Plain 1}}is{{else}}are{{end}} still readable in your data folder. They're kept so you can go back if something looks wrong.</p>
+  {{if .Backups}}
+  <form method="post" action="/encryption/remove-unencrypted" onsubmit="return confirm('Permanently delete the unencrypted copies? This can\'t be undone.')">
+    <button class="ghost">Delete unencrypted copies</button>
+    <span class="muted small">Your newest encrypted backup is checked first.</span>
+  </form>
+  {{else}}<p class="muted small">Make an encrypted backup below before these can be removed.</p>{{end}}
+</section>
+{{end}}
+
+<section class="panel">
+  <h2>Google Drive</h2>
+  {{if not .On}}
+    <p class="muted">Available once encryption is on, so nothing readable ever reaches Google.</p>
+  {{else if .DriveOn}}
+    <p><span class="ok">● Connected.</span> Each daily backup is encrypted here, then sent. Drive keeps the newest {{.Cfg.DriveKeep}}.</p>
+    {{with .DriveLast}}{{if .At}}<p class="small">Last upload {{ts .At}}: {{.File}}{{if .Err}}<br><span class="bad">{{.Err}}</span>{{else}} <span class="ok">verified</span>{{end}}</p>{{end}}{{end}}
+    <form method="post" action="/encryption/drive/disconnect"><button class="ghost">Disconnect</button></form>
+  {{else if and .DriveAuth (not .DriveAuth.Err)}}
+    <p>Go to <a href="{{.DriveAuth.URL}}" target="_blank" rel="noopener noreferrer">{{.DriveAuth.URL}}</a> and enter <code class="big">{{.DriveAuth.UserCode}}</code></p>
+    <p class="muted small">Waiting for Google…</p>
+  {{else if .DriveReady}}
+    {{with .DriveAuth}}<p class="bad small">{{.Err}}</p>{{end}}
+    <form method="post" action="/encryption/drive/connect"><button>Connect Google Drive</button></form>
+    <p class="muted small">BackTrackarr can only see the files it creates in your Drive.</p>
+  {{else}}
+    <ol class="small">
+      <li>In <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener noreferrer">Google Cloud</a>, create a project and enable the <b>Google Drive API</b>.</li>
+      <li>Under <b>Google Auth Platform</b>, set up the app as External, add the <code>drive.file</code> scope, and click <b>Publish app</b>. In Testing mode, Google ends the sign-in after 7 days.</li>
+      <li>Under <b>Clients</b>, create a client of type <b>TVs and Limited Input devices</b>.</li>
+      <li>Paste its ID and secret into <a href="/settings">Settings, Google Drive backups</a>, then come back here.</li>
+    </ol>
+  {{end}}
+</section>
+
+<section class="panel">
+  <h2>Back up</h2>
+  <form method="post" action="/backup" class="row"><button>Back up now</button>
+    <span class="muted small">{{.Backups}} encrypted backup{{if ne .Backups 1}}s{{end}} on this server. Runs every {{.Cfg.BackupEvery}}, keeps {{.Cfg.BackupKeep}}. <a href="/settings">Change</a></span></form>
+</section>
+
+{{template "jobs" .Jobs}}
+{{end}}

@@ -68,7 +68,7 @@
   </section>
   <section class="panel">
     <h2>Data</h2>
-    <form method="post" action="/backup" class="row"><button>Back up now</button><span class="muted small">Snapshot to /data/backups (daily automatically, keeps {{.Cfg.BackupKeep}}).</span></form>
+    <form method="post" action="/backup" class="row"><button>Back up now</button><span class="muted small">Snapshot to /data/backups (every {{.Cfg.BackupEvery}}, keeps {{.Cfg.BackupKeep}}). <a href="/settings">Change</a></span></form>
     <p class="row"><a class="btn ghost" href="/api/export">Export all plays (NDJSON)</a></p>
   </section>
 </div>

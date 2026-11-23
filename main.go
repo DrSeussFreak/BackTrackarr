@@ -38,6 +38,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck(cfg))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "restore" {
+		os.Exit(restoreBackup(cfg, os.Args[2:]))
+	}
 	// Saving on the Settings page ends run, and the loop starts it again with
 	// the new values, without restarting the process or container.
 	for {
@@ -56,11 +59,15 @@ func main() {
 // should start again.
 func run() (bool, error) {
 	cfg := config.Load() // the data folder always comes from the environment
-	st, err := store.Open(cfg.DataDir)
+	useDataTemp(cfg.DataDir)
+	enc, err := store.PrepareEncryption(cfg.DataDir, cfg.EncryptionKeyFile)
 	if err != nil {
 		return false, err
 	}
-	useDataTemp(cfg.DataDir)
+	st, err := store.OpenWith(cfg.DataDir, enc)
+	if err != nil {
+		return false, err
+	}
 	saved, err := st.Settings(context.Background())
 	if err != nil {
 		st.Close()
@@ -275,6 +282,21 @@ func setupThrottle(cfg *config.Config, st *store.Store) *throttle.Transport {
 		}
 	})
 	return t
+}
+
+// restoreBackup puts an encrypted backup into an empty data folder.
+func restoreBackup(cfg *config.Config, args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: backtrackarr restore /path/to/backup.btbak")
+		return 2
+	}
+	useDataTemp(cfg.DataDir)
+	if err := store.RestoreBackup(context.Background(), cfg.DataDir, args[0], cfg.EncryptionKeyFile, os.Getenv("RECOVERY_KEY")); err != nil {
+		fmt.Fprintln(os.Stderr, "restore failed:", err)
+		return 1
+	}
+	fmt.Println("restored. Start BackTrackarr with the same ENCRYPTION_KEY_FILE.")
+	return 0
 }
 
 func healthcheck(cfg *config.Config) int {

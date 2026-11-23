@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,8 @@ type Engine struct {
 	machine  string
 	users    []PlexUser
 	usersAt  time.Time
+
+	drive driveState
 }
 
 func New(ctx context.Context, cfg *config.Config, st *store.Store, px *plex.Client, all []sinks.Sink, log *slog.Logger) *Engine {
@@ -534,7 +537,7 @@ func (e *Engine) ImportTrakt(ctx context.Context, user string, report func(strin
 
 // RunBackups writes a database snapshot shortly after start, then daily.
 func (e *Engine) RunBackups(ctx context.Context) {
-	t := time.NewTimer(5 * time.Minute)
+	t := time.NewTimer(e.nextBackup(ctx, time.Now()))
 	defer t.Stop()
 	for {
 		select {
@@ -542,13 +545,39 @@ func (e *Engine) RunBackups(ctx context.Context) {
 			return
 		case <-t.C:
 		}
-		if name, err := e.st.Backup(ctx, e.cfg.BackupKeep); err != nil {
+		wait := time.Duration(0)
+		if err := e.BackupNow(ctx, func(msg string) { e.log.Info("backup", "status", msg) }); err != nil {
 			e.log.Error("backup", "err", err)
-		} else {
-			e.log.Info("backup written", "file", name)
+			if ctx.Err() == nil && !e.backupSaved(ctx) {
+				wait = min(time.Hour, e.cfg.BackupInterval()) // nothing was saved: try again soon
+			}
 		}
-		t.Reset(24 * time.Hour)
+		if wait == 0 {
+			wait = e.nextBackup(ctx, time.Now())
+		}
+		t.Reset(wait)
 	}
+}
+
+const backupLastKey = "backup|last"
+
+// backupSaved reports whether a backup was written within the last minute.
+func (e *Engine) backupSaved(ctx context.Context) bool {
+	v, _ := e.st.GetKV(ctx, backupLastKey)
+	at, _ := strconv.ParseInt(v, 10, 64)
+	return time.Now().Unix()-at < 60
+}
+
+// nextBackup counts from the last backup, so restarts and saved settings
+// neither add extra backups nor put the next one off. One that is due waits
+// a few minutes after start, while the app settles.
+func (e *Engine) nextBackup(ctx context.Context, now time.Time) time.Duration {
+	v, _ := e.st.GetKV(ctx, backupLastKey)
+	at, _ := strconv.ParseInt(v, 10, 64)
+	if at == 0 {
+		return 5 * time.Minute
+	}
+	return max(time.Unix(at, 0).Add(e.cfg.BackupInterval()).Sub(now), 5*time.Minute)
 }
 
 // ---------- private libraries and per-kind rules ----------

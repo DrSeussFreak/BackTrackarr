@@ -11,7 +11,7 @@
 > - **New install:** start it, then set a password on **Settings** right away.
 >   Until then, anyone who can reach the app can use it.
 > - **Backups:** **Back up settings** downloads an encrypted file with every
->   setting and key. The daily database backups include them too, unencrypted,
+>   setting and key. The daily database backups include them too, unencrypted unless you turn on encryption,
 >   so keep `/data` private.
 > - **Environment-only:** `DATA_DIR`, `LISTEN`, the recovery switches
 >   `AUTH_RESET` and `SETTINGS_IGNORE`, and the alternate API addresses
@@ -243,7 +243,17 @@ Default `false`.
 **`CLZ_IMPORT_DIR`**: Folder BackTrackarr watches for CLZ Comics XML or CSV
 exports. Default `/data/import/clz`.
 
-**`BACKUP_KEEP`**: How many daily backups should be kept? Default `7`.
+**`BACKUP_EVERY`**: How often to back up: `1 hour`, `6 hours`, `12 hours`,
+`1 day`, `2 days`, `3 days`, `1 week`, `2 weeks` or `30 days`. Default `1 day`.
+
+**`BACKUP_KEEP`**: How many backups should be kept? Default `7`.
+
+**`ENCRYPTION_KEY_FILE`**: Path to a key file outside the data volume. Setting
+it encrypts the database and backups. See Encryption in [INSTALL](INSTALL.md).
+This must stay in the environment.
+
+**`GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET`, `GDRIVE_FOLDER`, `GDRIVE_KEEP`**:
+Encrypted backups to your Google Drive. Set them in Settings.
 
 **`BACKUP_COMPRESS`**: Compress backups? Default `true`. Leave it on, since a
 5 GB database shrinks to roughly 1–2 GB.
