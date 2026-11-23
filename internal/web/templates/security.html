@@ -108,5 +108,5 @@
   {{if gt (len .Sessions) 1}}<form method="post" action="/security/sessions/others"><button class="ghost">Sign out everywhere else</button></form>{{end}}
   <p class="muted small">Sessions last {{.SessionDays}} days from the last visit (<code>SESSION_DAYS</code>).</p>
 </section>
-<script src="/static/passkeys.js"></script>
+<script src="{{asset "passkeys.js"}}"></script>
 {{end}}

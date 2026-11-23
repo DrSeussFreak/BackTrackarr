@@ -125,6 +125,7 @@ func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger
 		fm[k] = v
 	}
 	fm["mine"] = eng.IsMyService
+	fm["asset"] = assetURL
 	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security", "encryption"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))
 	}
@@ -165,7 +166,7 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("GET /api/export", s.apiExport)
 	s.routesExtra(admin)
 	s.routesStreaming(root, admin)
-	root.Handle("GET /static/", http.FileServerFS(assets))
+	root.Handle("GET /static/", staticFiles())
 	s.routesAuth(root)
 	s.routesSecurity(admin)
 	s.routesSettings(admin)
