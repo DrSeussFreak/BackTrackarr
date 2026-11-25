@@ -55,6 +55,21 @@ type ConnProbe struct {
 	addr  string
 	needs []string
 	run   func(*connRun)
+	// patience replaces the usual wait for apps that are slow to answer.
+	patience time.Duration
+}
+
+// slowConnHTTP is connHTTP with more patience, for apps like Plekt that can
+// take a while to start answering. It's otherwise identical.
+var slowConnHTTP = &http.Client{
+	Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: 2 * time.Minute,
+		DisableKeepAlives:     true,
+	},
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 
 // Replaced in tests.
@@ -194,7 +209,11 @@ func (t *connRun) call(method, target string, hdr map[string]string, payload []b
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
-	resp, err := connHTTP.Do(req)
+	client := connHTTP
+	if t.p.patience > 0 {
+		client = slowConnHTTP // the run's own deadline still applies
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		t.failNetwork(target, err)
 		return nil
@@ -259,6 +278,10 @@ func (e *Engine) connProbes() []*ConnProbe {
 	simple := func(id, name, group, addr, secret string, run func(*connRun, string, string)) *ConnProbe {
 		return &ConnProbe{ID: id, Name: name, Group: group, Keys: []string{addr, secret}, addr: addr, needs: []string{addr, secret},
 			run: func(t *connRun) { run(t, base(t.v(addr)), t.v(secret)) }}
+	}
+	patient := func(p *ConnProbe, d time.Duration) *ConnProbe {
+		p.patience = d
+		return p
 	}
 	bearer := func(k string) map[string]string { return map[string]string{"Authorization": "Bearer " + k} }
 	const (
@@ -421,11 +444,11 @@ func (e *Engine) connProbes() []*ConnProbe {
 				t.add("Token accepted")
 			}
 		}),
-		simple("plekt", "Plekt", history, "PLEKT_URL", "PLEKT_API_KEY", func(t *connRun, b, k string) {
+		patient(simple("plekt", "Plekt", history, "PLEKT_URL", "PLEKT_API_KEY", func(t *connRun, b, k string) {
 			if t.get(b+"/api/backup/export?collection=watchHistory&limit=1", map[string]string{"X-Api-Key": k}, nil) {
 				t.add("Key accepted, watch history is readable")
 			}
-		}),
+		}), plektPatience),
 		simple("seerr", "Jellyseerr or Overseerr", history, "SEERR_URL", "SEERR_API_KEY", func(t *connRun, b, k string) {
 			var st struct {
 				Version string `json:"version"`
@@ -834,7 +857,11 @@ func (e *Engine) TestConnection(ctx context.Context, id string, posted map[strin
 		res.Status, res.Headline, res.Fix = ConnFail, "That address isn't complete", "Start it with http:// or https://, and include the port."
 		return res, true
 	}
-	cctx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	wait := 25 * time.Second
+	if p.patience > 0 {
+		wait = p.patience
+	}
+	cctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	start := time.Now()
 	t := &connRun{ctx: cctx, e: e, p: p, v: val, res: &res}

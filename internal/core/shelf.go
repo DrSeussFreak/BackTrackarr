@@ -52,7 +52,21 @@ func shelfSearchJSON(ctx context.Context, u string, hdr map[string]string, body,
 	return shelfDo(ctx, http.MethodPost, u, hdr, b, out)
 }
 
+type shelfTimeoutKey struct{}
+
+// withShelfTimeout gives one slow source more time per request than the usual
+// shelfHTTP limit. The import's own context still bounds the whole run.
+func withShelfTimeout(ctx context.Context, d time.Duration) context.Context {
+	return context.WithValue(ctx, shelfTimeoutKey{}, d)
+}
+
 func shelfDo(ctx context.Context, method, u string, hdr map[string]string, body []byte, out any) error {
+	client := shelfHTTP
+	if d, ok := ctx.Value(shelfTimeoutKey{}).(time.Duration); ok && d > client.Timeout {
+		patient := *shelfHTTP
+		patient.Timeout = d
+		client = &patient
+	}
 	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
 	if err != nil {
 		return errors.New("bad service address")
@@ -65,7 +79,7 @@ func shelfDo(ctx context.Context, method, u string, hdr map[string]string, body 
 	for k, v := range hdr {
 		req.Header.Set(k, v)
 	}
-	resp, err := shelfHTTP.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		// url.Error quotes the full URL, which can hold an API key.
 		var ue *url.Error

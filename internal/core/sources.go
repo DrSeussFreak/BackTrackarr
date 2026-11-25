@@ -310,8 +310,14 @@ func (e *Engine) pullCrossWatch(ctx context.Context, u *uniRun) error {
 
 // ---------- Plekt ----------
 
+// plektPatience is how long BackTrackarr waits on Plekt, which can be slow to
+// start answering, for a connection test or for one page of an import. It
+// stays under the 100 seconds common reverse proxies such as Cloudflare allow.
+const plektPatience = 90 * time.Second
+
 func (e *Engine) pullPlekt(ctx context.Context, u *uniRun) error {
 	hdr := map[string]string{"X-Api-Key": e.cfg.PlektKey}
+	ctx = withShelfTimeout(ctx, plektPatience)
 	cursor := ""
 	for page := 0; page < 100000; page++ {
 		q := url.Values{"collection": {"watchHistory"}, "limit": {"500"}}
