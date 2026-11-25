@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -81,6 +82,9 @@ func shelfDo(ctx context.Context, method, u string, hdr map[string]string, body 
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		if shelfTimedOut(ctx, err) {
+			return errShelfSlow
+		}
 		// url.Error quotes the full URL, which can hold an API key.
 		var ue *url.Error
 		if errors.As(err, &ue) {
@@ -94,9 +98,26 @@ func shelfDo(ctx context.Context, method, u string, hdr map[string]string, body 
 		return shelfStatusError{resp.StatusCode}
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, shelfMaxBody)).Decode(out); err != nil {
+		if shelfTimedOut(ctx, err) {
+			return errShelfSlow // the reply started, but didn't finish in time
+		}
 		return fmt.Errorf("unreadable reply: %w", err)
 	}
 	return nil
+}
+
+// errShelfSlow means a source took longer than its time limit. It's a plain
+// sentence because it can reach the Import page as is.
+var errShelfSlow = errors.New("the service didn't answer in time; try again when it's less busy")
+
+// shelfTimedOut reports a request that ran out of time, as opposed to an
+// import being stopped or paused (which cancels ctx and must not look slow).
+func shelfTimedOut(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	var nerr net.Error
+	return errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &nerr) && nerr.Timeout())
 }
 
 type shelfStatusError struct{ code int }

@@ -123,8 +123,22 @@ func (e *Engine) RunHistorySources(ctx context.Context) {
 
 // ---------- Tautulli ----------
 
+// Tautulli's history query slows down on large libraries, more so deep into
+// the list. Smaller pages, a long wait per page and a few retries let a big
+// import finish instead of failing on one slow page.
+const (
+	tautulliPatience = 5 * time.Minute
+	tautulliPage     = 500
+	tautulliTries    = 3
+)
+
 func (e *Engine) pullTautulli(ctx context.Context, u *uniRun) error {
-	const size = 1000
+	return e.pullTautulliWith(withShelfTimeout(ctx, tautulliPatience), u)
+}
+
+// pullTautulliWith uses the per-page time limit already set on ctx.
+func (e *Engine) pullTautulliWith(ctx context.Context, u *uniRun) error {
+	const size = tautulliPage
 	for start := 0; ; start += size {
 		q := url.Values{"apikey": {e.cfg.TautulliKey}, "cmd": {"get_history"}, "start": {strconv.Itoa(start)}, "length": {strconv.Itoa(size)},
 			"order_column": {"date"}, "order_dir": {"asc"}, "grouping": {"0"}}
@@ -138,7 +152,18 @@ func (e *Engine) pullTautulli(ctx context.Context, u *uniRun) error {
 				} `json:"data"`
 			} `json:"response"`
 		}
-		if err := shelfGetJSON(ctx, e.cfg.TautulliURL+"/api/v2?"+q.Encode(), nil, &res); err != nil {
+		var err error
+		for try := 1; try <= tautulliTries; try++ {
+			if err = shelfGetJSON(ctx, e.cfg.TautulliURL+"/api/v2?"+q.Encode(), nil, &res); !errors.Is(err, errShelfSlow) {
+				break
+			}
+			e.log.Warn("tautulli was slow to answer, trying again", "from", start, "try", try)
+		}
+		if errors.Is(err, errShelfSlow) {
+			return fmt.Errorf("Tautulli didn't answer within %s, %d times in a row, at play %d. Plays before that were imported; try again when Tautulli is less busy",
+				tautulliPatience, tautulliTries, start+1)
+		}
+		if err != nil {
 			return err
 		}
 		if res.Response.Result != "success" {
