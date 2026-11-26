@@ -560,8 +560,8 @@ func (s *Store) computeStats(ctx context.Context, user string) (*Stats, error) {
 		st.Years = append(st.Years, y)
 	}
 	rows.Close()
-	if st.TopShows, err = s.nameCounts(ctx, `SELECT m.show_title, COUNT(*) c FROM plays p JOIN media m ON m.id=p.media_id
-		WHERE m.kind='episode' AND (?1='' OR p.user=?1)
+	if st.TopShows, err = s.nameCounts(ctx, `SELECT MAX(m.show_title), COUNT(*) c FROM plays p JOIN media m ON m.id=p.media_id
+		WHERE m.kind='episode' AND COALESCE(TRIM(m.show_title),'')<>'' AND (?1='' OR p.user=?1)
 		GROUP BY COALESCE(m.show_tvdb, m.show_tmdb, m.show_title) ORDER BY c DESC LIMIT 10`, user); err != nil {
 		return nil, err
 	}
@@ -577,7 +577,7 @@ func (s *Store) computeStats(ctx context.Context, user string) (*Stats, error) {
 	}
 	// Rewatches: video items played more than once by the same user.
 	if st.Rewatched, err = s.nameCounts(ctx, `SELECT CASE WHEN m.kind='episode'
-			THEN m.show_title || ' · S' || printf('%02d', m.season) || 'E' || printf('%02d', m.episode) ELSE m.title END, COUNT(*) c
+			THEN COALESCE(NULLIF(TRIM(m.show_title),''), m.title) || ' · S' || printf('%02d', m.season) || 'E' || printf('%02d', m.episode) ELSE m.title END, COUNT(*) c
 		FROM plays p JOIN media m ON m.id=p.media_id
 		WHERE m.kind!='track' AND (?1='' OR p.user=?1) GROUP BY m.id, p.user HAVING c > 1 ORDER BY c DESC LIMIT 10`, user); err != nil {
 		return nil, err

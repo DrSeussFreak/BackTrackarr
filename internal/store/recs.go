@@ -19,7 +19,9 @@ type Rated struct {
 }
 
 // visibleClause hides plays from private libraries unless includePrivate.
-const titleExpr = `CASE WHEN m.kind='episode' THEN m.show_title ELSE m.title END`
+// An episode can arrive without its show's name (some imports leave it out).
+// Its own title would be mistaken for a show, so it becomes ” and is skipped.
+const titleExpr = `COALESCE(CASE WHEN m.kind='episode' THEN NULLIF(TRIM(m.show_title),'') ELSE m.title END,'')`
 
 // RatedTitles returns a user's ratings (shows aggregated from episode ratings),
 // best first when desc, worst first otherwise.
@@ -72,6 +74,9 @@ func (s *Store) rated(ctx context.Context, q string, args ...any) ([]Rated, erro
 		if err := rows.Scan(&r.Kind, &r.Title, &r.Year, &r.Rating, &r.Plays); err != nil {
 			return nil, err
 		}
+		if r.Title == "" {
+			continue // an episode with no show name
+		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -93,6 +98,9 @@ func (s *Store) SeenSet(ctx context.Context, user string) (map[string]bool, erro
 		var y int
 		if err := rows.Scan(&k, &t, &y); err != nil {
 			return nil, err
+		}
+		if t == "" {
+			continue
 		}
 		out[k+"|"+NormTitle(t)+"|"] = true
 		if y > 0 {
