@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/DrSeussFreak/BackTrackarr/internal/config"
@@ -20,14 +21,15 @@ import (
 )
 
 type Engine struct {
-	ctx   context.Context // app lifetime, for background jobs
-	cfg   *config.Config
-	st    *store.Store
-	plex  *plex.Client
-	sinks []sinks.Sink
-	log   *slog.Logger
-	wake  chan struct{}
-	Jobs  *Jobs
+	ctx          context.Context // app lifetime, for background jobs
+	aiRefreshing atomic.Bool     // one AI model-list refresh at a time
+	cfg          *config.Config
+	st           *store.Store
+	plex         *plex.Client
+	sinks        []sinks.Sink
+	log          *slog.Logger
+	wake         chan struct{}
+	Jobs         *Jobs
 
 	secMu    sync.Mutex
 	sections map[string]string // library section id -> title, for private-library checks

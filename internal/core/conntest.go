@@ -411,6 +411,10 @@ func (e *Engine) connProbes() []*ConnProbe {
 			}
 			t.add("Key accepted, %s available", plural(len(res.Models), "model"))
 			want, found := t.v("GEMINI_MODEL"), false
+			if want == ModelAuto {
+				t.add("Using the newest model automatically")
+				return
+			}
 			for _, m := range res.Models {
 				found = found || strings.TrimPrefix(m.Name, "models/") == want
 			}

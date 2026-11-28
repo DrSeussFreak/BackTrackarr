@@ -228,10 +228,3 @@ func (e *Engine) RunRecRefresh(ctx context.Context) {
 
 // RecRefreshEvery is how often recommendations refresh (0 = off).
 func (e *Engine) RecRefreshEvery() time.Duration { return e.cfg.RecRefresh }
-
-// GeminiModelInUse returns the model being used, and whether it was picked
-// automatically because the configured one was retired.
-func (e *Engine) GeminiModelInUse(ctx context.Context) (string, bool) {
-	m := e.geminiModel(ctx)
-	return m, m != e.cfg.GeminiModel
-}

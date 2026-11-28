@@ -252,9 +252,9 @@ func buildSettings() {
 
 	g = "AI recommendations"
 	add(g, "ANTHROPIC_API_KEY", "Anthropic API key", "secret", "", "")
-	add(g, "CLAUDE_MODEL", "Claude model", "text", "claude-opus-5-5", "")
+	add(g, "CLAUDE_MODEL", "Claude model", "text", "auto", "auto uses the newest model. You can also pick one on the Recommendations page.")
 	add(g, "GEMINI_API_KEY", "Gemini API key", "secret", "", "")
-	add(g, "GEMINI_MODEL", "Gemini model", "text", "gemini-3.1-pro-preview", "If Google retires it, the newest Pro model is used automatically.")
+	add(g, "GEMINI_MODEL", "Gemini model", "text", "auto", "auto uses the newest Pro model. You can also pick one on the Recommendations page.")
 	add(g, "AI_INCLUDE_ADULT", "Include adult by default", "bool", "false", "")
 	add(g, "REC_REFRESH_HOURS", "Refresh recommendations every (hours)", "number", "24", "0 turns it off. Each refresh uses your API credit.")
 

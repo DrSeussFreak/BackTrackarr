@@ -23,6 +23,16 @@ func (s *Server) routesRecs(admin *http.ServeMux) {
 // A person's page keeps at least this many titles; ignoring below it asks for more.
 const recTopUpBelow = 5
 
+// modelPicker is one service's model drop-down.
+type modelPicker struct {
+	Provider, Label string
+	Choice          string // "" = automatic
+	Setting         string // a fixed model from Settings, if any
+	InUse           string
+	Auto            bool
+	Models          []core.AIModel
+}
+
 type recSourceGroup struct {
 	Name    string
 	Sources []core.RecSource
@@ -109,13 +119,33 @@ func (s *Server) recsPage(w http.ResponseWriter, r *http.Request) {
 		movieArr = movieArr || a.Kind == "radarr" || a.Kind == "whisparr"
 		showArr = showArr || a.Kind == "sonarr" || a.Kind == "whisparr"
 	}
-	gemini, switched := s.eng.GeminiModelInUse(ctx)
+	var pickers []modelPicker
+	for _, p := range s.eng.AIProviders() {
+		mp := modelPicker{Provider: p, Label: map[string]string{"claude": "Claude", "gemini": "Gemini"}[p],
+			Choice: s.eng.AIModelChoice(ctx, p), Models: s.eng.AIModels(ctx, p)}
+		mp.InUse, mp.Auto = s.eng.AIModelInUse(ctx, p)
+		setting := s.cfg.AnthropicModel
+		if p == "gemini" {
+			setting = s.cfg.GeminiModel
+		}
+		if setting != "" && setting != core.ModelAuto {
+			mp.Setting = setting
+		}
+		known := mp.Choice == ""
+		for _, m := range mp.Models {
+			known = known || m.ID == mp.Choice
+		}
+		if !known { // a chosen model that's no longer listed still shows
+			mp.Models = append([]core.AIModel{{ID: mp.Choice, Name: mp.Choice}}, mp.Models...)
+		}
+		pickers = append(pickers, mp)
+	}
 	every := s.eng.RecRefreshEvery()
 	data := M{"Title": "Recommendations", "Nav": "recs", "Runs": runs, "Users": users, "User": user,
 		"Providers": s.eng.AIProviders(), "Arr": arr, "HasSeerr": s.cfg.SeerrURL != "" && s.cfg.SeerrKey != "", "Cfg": s.cfg,
 		"Jobs": s.eng.Jobs.List(), "Refresh": s.eng.Jobs.AnyRunning(), "Flash": takeFlash(w, r),
 		"SourceGroups": groups, "SourcesChecked": checked, "SourcesTotal": len(sources), "Ignored": ignored,
-		"HasMovieArr": movieArr, "HasShowArr": showArr, "GeminiModel": gemini, "GeminiSwitched": switched, "LastRun": last, "RefreshHours": int(every.Hours())}
+		"HasMovieArr": movieArr, "HasShowArr": showArr, "Pickers": pickers, "LastRun": last, "RefreshHours": int(every.Hours())}
 	if last > 0 && every > 0 {
 		data["NextRun"] = time.Unix(last, 0).Add(every).Unix()
 	}
@@ -130,7 +160,16 @@ func (s *Server) recsRun(w http.ResponseWriter, r *http.Request) {
 	n, _ := strconv.Atoi(r.FormValue("count"))
 	user := r.FormValue("user")
 	req := core.RecRequest{User: user, Provider: r.FormValue("provider"), Kind: r.FormValue("kind"), Count: n,
-		IncludeAdult: r.FormValue("adult") == "1", Note: r.FormValue("note"), OnlyMine: r.FormValue("mine") == "1"}
+		IncludeAdult: r.FormValue("adult") == "1", Note: r.FormValue("note"), OnlyMine: r.FormValue("mine") == "1",
+		ClaudeModel: cleanModel(r.FormValue("claude_model")), GeminiModel: cleanModel(r.FormValue("gemini_model"))}
+	for p, m := range map[string]string{"claude": req.ClaudeModel, "gemini": req.GeminiModel} {
+		if _, sent := r.PostForm[p+"_model"]; sent {
+			if err := s.eng.SetAIModelChoice(r.Context(), p, m); err != nil {
+				s.fail(w, err)
+				return
+			}
+		}
+	}
 	if r.PostForm.Get("src_shown") == "1" {
 		if ids := r.PostForm["src"]; len(ids) > 0 {
 			if err := s.eng.SaveRecSources(r.Context(), user, ids); err != nil {
@@ -193,6 +232,20 @@ func (s *Server) recUnignore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.flash(w, r, recsURL(user)+"#ignored", "Restored. It can be recommended again.")
+}
+
+// cleanModel keeps a model id to the characters real ids use.
+func cleanModel(v string) string {
+	v = strings.TrimSpace(v)
+	if len(v) > 80 {
+		return ""
+	}
+	for _, r := range v {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '.' || r == '_') {
+			return ""
+		}
+	}
+	return v
 }
 
 // ---------- where-to-watch badges ----------

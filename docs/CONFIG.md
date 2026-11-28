@@ -227,12 +227,13 @@ Your titles and ratings are sent to whichever AI provider you use.
 
 **`ANTHROPIC_API_KEY`**: Want Claude recommendations? Create a key at
 <https://console.anthropic.com/settings/keys>.
-- **`CLAUDE_MODEL`**: Default `claude-opus-5-5`.
+- **`CLAUDE_MODEL`**: Default `auto`, which uses the newest full-size Claude
+  model your key can use. You can pick another on the Recommendations page.
 
 **`GEMINI_API_KEY`**: Want Gemini recommendations? Create a key at
 <https://aistudio.google.com/apikey>.
-- **`GEMINI_MODEL`**: Default `gemini-3.1-pro-preview`. If Google retires the
-  model, BackTrackarr switches to the newest Pro model your key can use.
+- **`GEMINI_MODEL`**: Default `auto`, which uses the newest Pro model your key
+  can use. If a model fails, the next one is tried, then the other service.
 - **`REC_REFRESH_HOURS`**: How often recommendations refresh on their own.
   Default `24`, `0` = off. Each refresh uses your API credit.
 

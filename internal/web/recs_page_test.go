@@ -39,6 +39,9 @@ func TestRecsPageIgnoreRestoreAndLinks(t *testing.T) {
 	if err := st.SaveRecRun(ctx, failed); err != nil {
 		t.Fatal(err)
 	}
+	if err := st.SetKV(ctx, "ai_models|claude", `{"at":`+strconv.FormatInt(time.Now().Unix(), 10)+`,"models":[{"id":"claude-new-9","name":"Claude New 9"},{"id":"claude-mid-8","name":"Claude Mid 8"}]}`); err != nil {
+		t.Fatal(err)
+	}
 	c := newClient(t, h, "10.0.4.1")
 	body := c.get("/recs").Body.String()
 	for _, want := range []string{
@@ -49,6 +52,7 @@ func TestRecsPageIgnoreRestoreAndLinks(t *testing.T) {
 		`href="https://www.justwatch.com/us/search?q=Paths&#43;of&#43;Glory"`,
 		`+ 2 more`, `/recs/` + strconv.FormatInt(run.Recs[0].ID, 10) + `/ignore`,
 		"Gemini is busy right now.", "Technical details", "Sources used: 3 of 4",
+		`<select name="claude_model">`, `<option value="">From Settings (m)</option>`, `<option value="claude-mid-8" >Claude Mid 8 (claude-mid-8)</option>`,
 		`value="arr:radarr" checked`, `value="arr:radarr2" >`, "Refreshes on its own every 24 hours",
 	} {
 		if !strings.Contains(body, want) {
@@ -79,7 +83,16 @@ func TestRecsPageIgnoreRestoreAndLinks(t *testing.T) {
 	if body = c.get("/recs?user=Someone").Body.String(); strings.Contains(body, "Red Dwarf") || !strings.Contains(body, "No recommendations yet") {
 		t.Fatal("another person's page should be empty")
 	}
-	if w := c.form("/recs", url.Values{"user": {"x"}, "src_shown": {"1"}}); !strings.HasPrefix(w.Header().Get("Location"), "/recs?user=x") {
+	if w := c.form("/recs", url.Values{"user": {"x"}, "src_shown": {"1"}, "claude_model": {"claude-mid-8"}, "gemini_model": {"bad model!"}}); !strings.HasPrefix(w.Header().Get("Location"), "/recs?user=x") {
 		t.Fatalf("no sources chosen should send them back: %s", w.Header().Get("Location"))
+	}
+	if v, _ := st.GetKV(ctx, "ai_model_choice|claude"); v != "claude-mid-8" {
+		t.Fatalf("picked model not remembered: %q", v)
+	}
+	if v, _ := st.GetKV(ctx, "ai_model_choice|gemini"); v != "" {
+		t.Fatalf("a malformed model name must be dropped: %q", v)
+	}
+	if body = c.get("/recs").Body.String(); !strings.Contains(body, `<option value="claude-mid-8" selected>`) {
+		t.Fatal("the picked model should be selected")
 	}
 }

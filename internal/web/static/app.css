@@ -73,6 +73,9 @@ span.tag { white-space: nowrap; display: inline-block; }
 .more-tags > summary::-webkit-details-marker { display: none; }
 .more-tags[open] > summary { color: var(--ink); }
 .rec-sources { margin-top: 10px; }
+.rec-models { margin-top: 10px; gap: 8px 18px; }
+.rec-models label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; white-space: nowrap; }
+.rec-models select { min-width: 0; flex: 1 1 auto; max-width: 100%; text-overflow: ellipsis; }
 .rec-actions form.inline { display: inline-block; margin: 0 0 4px 4px; }
 @media (max-width: 700px) {
   table.recs, table.recs tbody, table.recs tr, table.recs td { display: block; width: auto; }

@@ -23,6 +23,16 @@
       {{if .Cfg.MyServices}}<label class="small" title="In Plex or on {{range $i, $s := .Cfg.MyServices}}{{if $i}}, {{end}}{{$s}}{{end}}"><input type="checkbox" name="mine" value="1"> only what I can watch</label>{{end}}
       <button>Recommend</button>
     </div>
+    <div class="row rec-models">
+      {{range .Pickers}}
+      <label class="small">{{.Label}} model
+        <select name="{{.Provider}}_model">
+          <option value="">{{if .Setting}}From Settings ({{.Setting}}){{else}}Newest{{if .Auto}} ({{.InUse}}){{end}}{{end}}</option>
+          {{$c := .Choice}}{{range .Models}}<option value="{{.ID}}" {{if eq .ID $c}}selected{{end}}>{{.Name}}{{if ne .Name .ID}} ({{.ID}}){{end}}</option>{{end}}
+        </select>
+      </label>
+      {{end}}
+    </div>
     <details class="rec-sources">
       <summary>Sources used{{if .User}} for {{.User}}{{end}}: {{.SourcesChecked}} of {{.SourcesTotal}}</summary>
       <input type="hidden" name="src_shown" value="1">
@@ -35,7 +45,7 @@
       <p class="muted small">Your choice is saved when you press Recommend. Adult sources start unchecked. Nothing adult is recommended unless you tick one, or tick “include adult”. With an adult source ticked, results follow that source's style.</p>
     </details>
   </form>
-  <p class="muted small">Models: Claude <code>{{.Cfg.AnthropicModel}}</code>, Gemini <code>{{.GeminiModel}}</code>{{if .GeminiSwitched}} (picked automatically, because <code>{{.Cfg.GeminiModel}}</code> is no longer available){{end}}. Your titles and ratings are sent to the provider you pick. Providers may still decline explicit titles.</p>
+  <p class="muted small">Each service uses its newest model unless you pick another. If a model fails, the next one is tried, and if a service fails, the other one is used. Your titles and ratings are sent to the service you pick. Providers may still decline explicit titles.</p>
   <p class="muted small">{{if .LastRun}}Last refreshed {{ts .LastRun}}.{{else}}No recommendations yet. Press Recommend to get the first set.{{end}}
     {{if .RefreshHours}}{{if .NextRun}} Refreshes on its own every {{.RefreshHours}} hours; next after {{ts .NextRun}}.{{else}} After the first set, they refresh on their own every {{.RefreshHours}} hours.{{end}}{{else}} Automatic refresh is off.{{end}}</p>
   {{end}}

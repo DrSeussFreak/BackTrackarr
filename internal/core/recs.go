@@ -29,6 +29,8 @@ type RecRequest struct {
 	Note         string   // optional: "something light", "80s sci-fi"...
 	OnlyMine     bool     // keep only titles in Plex or on MY_STREAMING_SERVICES
 	Sources      []string // RecSource ids; nil means the saved or default choice
+	ClaudeModel  string   // "" = the setting, which defaults to the newest model
+	GeminiModel  string
 }
 
 func (e *Engine) AIProviders() []string {
@@ -248,24 +250,42 @@ func (e *Engine) Recommend(ctx context.Context, req RecRequest, report func(stri
 	if err != nil {
 		return err
 	}
-	var errs []string
-	for _, p := range providers {
+	run := func(p string) string {
 		report("asking " + p + "…")
 		run := &store.RecRun{User: req.User, Provider: p, Prompt: prompt}
-		text, model, err := e.askProvider(ctx, p, prompt, report)
-		run.Model = model
-		run.Response = text
+		choice := req.ClaudeModel
+		if p == "gemini" {
+			choice = req.GeminiModel
+		}
+		var text string
 		var recs []aiRec
-		if err == nil {
-			if recs, err = parseRecs(text); errors.Is(err, errUnreadableReply) {
-				report(p + ": reply couldn't be read, asking again…")
-				var retry string
-				if retry, _, err = e.askProvider(ctx, p, prompt+"\n\nReply with only the JSON array, nothing else.", report); err == nil {
-					run.Response = retry
-					recs, err = parseRecs(retry)
+		var err error
+		for i, model := range e.modelChain(ctx, p, choice) {
+			if i > 0 {
+				// A second model is worth trying unless the key itself is the problem.
+				if isKeyError(err) {
+					break
+				}
+				report(fmt.Sprintf("%s: %s didn't work, trying %s…", p, run.Model, model))
+				e.log.Warn("AI model failed, trying another", "provider", p, "from", run.Model, "to", model, "err", friendlyAIError(p, err))
+			}
+			run.Model = model
+			if text, err = e.askProvider(ctx, p, model, prompt); err == nil {
+				if recs, err = parseRecs(text); errors.Is(err, errUnreadableReply) {
+					report(p + ": reply couldn't be read, asking again…")
+					var retry string
+					if retry, err = e.askProvider(ctx, p, model, prompt+"\n\nReply with only the JSON, nothing else."); err == nil {
+						text = retry
+						recs, err = parseRecs(retry)
+					}
 				}
 			}
+			run.Response = text
+			if err == nil {
+				break
+			}
 		}
+		problem := ""
 		if err == nil {
 			run.Recs = e.filterRecs(ctx, recs, recFilter{seen: skip, ignored: ignored, have: have}, req)
 		} else {
@@ -274,14 +294,37 @@ func (e *Engine) Recommend(ctx context.Context, req RecRequest, report func(stri
 			if errors.Is(err, errUnreadableReply) {
 				run.ErrorDetail += "\n\nStart of the reply:\n" + truncate(run.Response, 600)
 			}
-			errs = append(errs, run.Error)
+			problem = run.Error
 		}
 		if serr := e.st.SaveRecRun(ctx, run); serr != nil {
-			return serr
+			return serr.Error()
 		}
 		if err == nil {
-			report(fmt.Sprintf("%s: %d recommendations", p, len(run.Recs)))
+			report(fmt.Sprintf("%s (%s): %d recommendations", p, run.Model, len(run.Recs)))
 		}
+		return problem
+	}
+	var errs []string
+	for _, p := range providers {
+		if problem := run(p); problem != "" {
+			errs = append(errs, problem)
+		}
+	}
+	// Asked for one service and it failed: use the other one if it's set up.
+	if len(providers) == 1 && len(errs) == 1 {
+		for _, other := range e.AIProviders() {
+			if other == providers[0] {
+				continue
+			}
+			report(fmt.Sprintf("%s failed, using %s instead…", providers[0], other))
+			if problem := run(other); problem == "" {
+				report("done with " + other + ", because " + providers[0] + " had a problem: " + errs[0])
+				return nil
+			} else {
+				errs = append(errs, problem)
+			}
+		}
+		return errors.New(strings.Join(errs, " "))
 	}
 	if len(errs) == len(providers) {
 		return errors.New(strings.Join(errs, " "))
@@ -292,26 +335,27 @@ func (e *Engine) Recommend(ctx context.Context, req RecRequest, report func(stri
 	return nil
 }
 
-func (e *Engine) askProvider(ctx context.Context, p, prompt string, report func(string)) (text, model string, err error) {
+func (e *Engine) askProvider(ctx context.Context, p, model, prompt string) (string, error) {
 	switch p {
 	case "claude":
-		text, err = e.askClaude(ctx, prompt)
-		return text, e.cfg.AnthropicModel, err
+		return e.askClaude(ctx, model, prompt)
 	case "gemini":
-		model = e.geminiModel(ctx)
-		text, err = e.askGemini(ctx, model, prompt)
-		if err != nil && isRetiredModel(err) {
-			if next, perr := e.pickGeminiModel(ctx, model); perr == nil && next != model {
-				report(fmt.Sprintf("gemini: %s isn't available, switching to %s…", model, next))
-				e.log.Warn("gemini model unavailable, switched automatically", "from", model, "to", next)
-				_ = e.st.SetKV(ctx, geminiFallbackKey+e.cfg.GeminiModel, next)
-				model = next
-				text, err = e.askGemini(ctx, model, prompt)
-			}
-		}
-		return text, model, err
+		return e.askGemini(ctx, model, prompt)
 	}
-	return "", "", fmt.Errorf("unknown provider %q", p)
+	return "", fmt.Errorf("unknown provider %q", p)
+}
+
+func isKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	for _, w := range []string{"401", "403", "invalid x-api-key", "api key not valid", "api_key_invalid", "permission"} {
+		if strings.Contains(s, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // friendlyAIError turns a provider failure into one plain sentence.
@@ -332,7 +376,7 @@ func friendlyAIError(p string, err error) string {
 	switch {
 	case errors.Is(err, errUnreadableReply):
 		return name + "'s reply couldn't be read, even after asking again."
-	case has("401", "403", "invalid x-api-key", "api key not valid", "permission"):
+	case isKeyError(err):
 		return name + " rejected the API key. Check it in Settings."
 	case isRetiredModel(err):
 		return name + "'s model isn't available. Choose another model in Settings."
@@ -342,6 +386,8 @@ func friendlyAIError(p string, err error) string {
 		return name + " is busy right now. Try again in a few minutes."
 	case has("deadline", "timeout"):
 		return name + " didn't answer in time."
+	case has("400"):
+		return name + " didn't accept the request for this model. Choose another model."
 	case has("blocked", "safety", "refus"):
 		return name + " declined this request."
 	}
@@ -436,135 +482,72 @@ func postJSON(ctx context.Context, url string, hdr map[string]string, in, out an
 	return json.Unmarshal(body, out)
 }
 
-// recTool makes Claude return the list as structured data instead of prose.
-var recTool = map[string]any{
-	"name":        "save_recommendations",
-	"description": "Save the recommendations for the viewer.",
-	"input_schema": map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"recommendations": map[string]any{
-				"type": "array",
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"kind":    map[string]any{"type": "string", "enum": []string{"movie", "show"}},
-						"title":   map[string]any{"type": "string"},
-						"year":    map[string]any{"type": "integer"},
-						"imdb_id": map[string]any{"type": "string"},
-						"tmdb_id": map[string]any{"type": "integer"},
-						"tvdb_id": map[string]any{"type": "integer"},
-						"reason":  map[string]any{"type": "string"},
-					},
-					"required": []string{"kind", "title", "year", "reason"},
+// recSchema makes Claude return the list as structured data instead of prose.
+// (Forcing a tool call is rejected by current Claude models.)
+var recSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"recommendations": map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"kind":    map[string]any{"type": "string", "enum": []string{"movie", "show"}},
+					"title":   map[string]any{"type": "string"},
+					"year":    map[string]any{"type": "integer"},
+					"imdb_id": map[string]any{"type": "string"},
+					"tmdb_id": map[string]any{"type": "integer"},
+					"tvdb_id": map[string]any{"type": "integer"},
+					"reason":  map[string]any{"type": "string"},
 				},
+				"required":             []string{"kind", "title", "year", "imdb_id", "tmdb_id", "tvdb_id", "reason"},
+				"additionalProperties": false,
 			},
 		},
-		"required": []string{"recommendations"},
 	},
+	"required":             []string{"recommendations"},
+	"additionalProperties": false,
 }
 
-func (e *Engine) askClaude(ctx context.Context, prompt string) (string, error) {
+func (e *Engine) askClaude(ctx context.Context, model, prompt string) (string, error) {
 	var out struct {
 		Content []struct {
-			Type  string          `json:"type"`
-			Text  string          `json:"text"`
-			Input json.RawMessage `json:"input"`
+			Type string `json:"type"`
+			Text string `json:"text"`
 		} `json:"content"`
 		StopReason string `json:"stop_reason"`
 	}
-	err := postJSON(ctx, e.cfg.AnthropicURL+"/v1/messages",
-		map[string]string{"x-api-key": e.cfg.AnthropicKey, "anthropic-version": "2023-06-01"},
-		map[string]any{"model": e.cfg.AnthropicModel, "max_tokens": 8000, "system": recSystem,
-			"tools": []any{recTool}, "tool_choice": map[string]string{"type": "tool", "name": "save_recommendations"},
-			"messages": []map[string]any{{"role": "user", "content": prompt}}}, &out)
+	body := map[string]any{"model": model, "max_tokens": 16000, "system": recSystem,
+		"output_config": map[string]any{"format": map[string]any{"type": "json_schema", "schema": recSchema}},
+		"messages":      []map[string]any{{"role": "user", "content": prompt}}}
+	hdr := map[string]string{"x-api-key": e.cfg.AnthropicKey, "anthropic-version": "2023-06-01"}
+	err := postJSON(ctx, e.cfg.AnthropicURL+"/v1/messages", hdr, body, &out)
+	if err != nil && strings.HasPrefix(err.Error(), "400") {
+		// The model wouldn't take the structured-output request (an older
+		// model, or a rule that changed): ask plainly. The prompt already
+		// requires JSON, and the reply reader copes with extra text.
+		delete(body, "output_config")
+		err = postJSON(ctx, e.cfg.AnthropicURL+"/v1/messages", hdr, body, &out)
+	}
 	if err != nil {
 		return "", err
 	}
+	if out.StopReason == "refusal" {
+		return "", errors.New("Claude refused this request")
+	}
 	var b strings.Builder
 	for _, c := range out.Content {
-		switch c.Type {
-		case "tool_use":
-			if len(c.Input) > 0 {
-				return string(c.Input), nil // parseRecs reads the "recommendations" field
-			}
-		case "text":
+		if c.Type == "text" {
 			b.WriteString(c.Text)
 		}
 	}
 	if b.Len() == 0 {
 		return "", fmt.Errorf("empty reply (stop reason %q)", out.StopReason)
 	}
+	if out.StopReason == "max_tokens" {
+		return "", errors.New("Claude's reply was cut off before it finished")
+	}
 	return b.String(), nil
-}
-
-const geminiFallbackKey = "gemini_model_fallback|"
-
-// geminiModel is the configured model, or the replacement picked
-// automatically after Google retired it.
-func (e *Engine) geminiModel(ctx context.Context) string {
-	if v, _ := e.st.GetKV(ctx, geminiFallbackKey+e.cfg.GeminiModel); v != "" {
-		return v
-	}
-	return e.cfg.GeminiModel
-}
-
-// pickGeminiModel asks Google which models this key can use and picks the
-// newest Pro text model, preferring a stable release over a preview of the
-// same version.
-func (e *Engine) pickGeminiModel(ctx context.Context, current string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.cfg.GeminiURL+"/v1beta/models?pageSize=1000", nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("x-goog-api-key", e.cfg.GeminiKey)
-	resp, err := aiHTTP.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("listing models: %s", resp.Status)
-	}
-	var list struct {
-		Models []struct {
-			Name    string   `json:"name"`
-			Methods []string `json:"supportedGenerationMethods"`
-		} `json:"models"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&list); err != nil {
-		return "", err
-	}
-	best, bestScore := "", -1.0
-	for _, m := range list.Models {
-		name := strings.TrimPrefix(m.Name, "models/")
-		if name == current || !strings.HasPrefix(name, "gemini-") || !strings.Contains(name, "-pro") {
-			continue
-		}
-		generates := false
-		for _, x := range m.Methods {
-			generates = generates || x == "generateContent"
-		}
-		skip := !generates
-		for _, w := range []string{"tts", "image", "vision", "embedding", "audio", "live", "exp"} {
-			skip = skip || strings.Contains(name, w)
-		}
-		if skip {
-			continue
-		}
-		v, _ := strconv.ParseFloat(strings.SplitN(strings.TrimPrefix(name, "gemini-"), "-", 2)[0], 64)
-		score := v * 100 // the newest version wins
-		if !strings.Contains(name, "preview") {
-			score++ // and a stable release beats a preview of the same version
-		}
-		if score > bestScore {
-			best, bestScore = name, score
-		}
-	}
-	if best == "" {
-		return "", errors.New("no Gemini Pro model is available to this key")
-	}
-	return best, nil
 }
 
 func (e *Engine) askGemini(ctx context.Context, model, prompt string) (string, error) {
