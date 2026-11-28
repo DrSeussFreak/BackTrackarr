@@ -187,7 +187,7 @@ func (e *Engine) fetchGeminiModels(ctx context.Context) ([]AIModel, error) {
 		for _, x := range m.Methods {
 			ok = ok || x == "generateContent"
 		}
-		for _, w := range []string{"tts", "image", "vision", "embedding", "audio", "live", "exp", "lite", "computer", "robotics"} {
+		for _, w := range []string{"tts", "image", "vision", "embedding", "audio", "live", "exp", "lite", "computer", "robotics", "customtools", "latest"} {
 			ok = ok && !strings.Contains(id, w)
 		}
 		if !ok {
@@ -265,7 +265,20 @@ func (e *Engine) modelChain(ctx context.Context, provider, choice string) []stri
 	chain := []string{first}
 	for _, m := range list {
 		if m.ID != first {
-			return append(chain, m.ID)
+			chain = append(chain, m.ID)
+			break
+		}
+	}
+	// Gemini's free allowance is separate for Flash models, and is often the
+	// only one a free key has, so a Flash model is always the last resort.
+	if provider == "gemini" {
+		for _, m := range list {
+			if strings.Contains(m.ID, "-flash") {
+				if m.ID != chain[len(chain)-1] && m.ID != first {
+					chain = append(chain, m.ID)
+				}
+				break
+			}
 		}
 	}
 	return chain

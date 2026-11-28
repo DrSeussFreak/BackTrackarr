@@ -287,7 +287,30 @@ func (e *Engine) Recommend(ctx context.Context, req RecRequest, report func(stri
 		}
 		problem := ""
 		if err == nil {
-			run.Recs = e.filterRecs(ctx, recs, recFilter{seen: skip, ignored: ignored, have: have}, req)
+			// Most suggestions can turn out to be things the viewer already has.
+			// Ask again, naming what was turned down, until the list is full.
+			f := recFilter{seen: skip, ignored: ignored, have: have, taken: map[string]bool{}}
+			run.Recs = e.filterRecs(ctx, recs, f, req)
+			offered := recs
+			for round := 0; round < recTopUpRounds && len(run.Recs) < req.Count && len(recs) > 0; round++ {
+				report(fmt.Sprintf("%s: %d of %d are new to you, asking for more…", p, len(run.Recs), req.Count))
+				var b strings.Builder
+				b.WriteString(prompt + "\n\nYou already suggested these. The viewer has seen or owns most of them, so suggest different titles, and look further from the obvious picks:\n")
+				for _, r := range offered {
+					fmt.Fprintf(&b, "- %s\n", r.Title)
+				}
+				more, merr := e.askProvider(ctx, p, run.Model, b.String())
+				if merr != nil {
+					break // keep what we have
+				}
+				if recs, merr = parseRecs(more); merr != nil {
+					break
+				}
+				offered = append(offered, recs...)
+				left := req
+				left.Count = req.Count - len(run.Recs)
+				run.Recs = append(run.Recs, e.filterRecs(ctx, recs, f, left)...)
+			}
 		} else {
 			run.Error = friendlyAIError(p, err)
 			run.ErrorDetail = err.Error()
@@ -399,8 +422,13 @@ func isRetiredModel(err error) bool {
 	return strings.Contains(s, "404") && (strings.Contains(s, "model") || strings.Contains(s, "not_found"))
 }
 
+// recTopUpRounds is how many extra times a service is asked when too few of
+// its suggestions were new to the viewer.
+const recTopUpRounds = 2
+
 type recFilter struct {
 	seen, ignored, have map[string]bool
+	taken               map[string]bool // already kept in this run, across rounds
 }
 
 func (e *Engine) filterRecs(ctx context.Context, in []aiRec, f recFilter, req RecRequest) []store.Rec {
@@ -420,7 +448,7 @@ func (e *Engine) filterRecs(ctx context.Context, in []aiRec, f recFilter, req Re
 		year := anyInt(r.Year)
 		key := kind + "|" + store.NormTitle(r.Title) + "|"
 		rk := store.RecKey(kind, r.Title)
-		if dup[key] || f.seen[key+strconv.Itoa(year)] || (kind == "show" && f.seen[key]) || f.ignored[rk] || f.have[rk] {
+		if dup[key] || f.taken[rk] || f.seen[key+strconv.Itoa(year)] || (kind == "show" && f.seen[key]) || f.ignored[rk] || f.have[rk] {
 			continue
 		}
 		dup[key] = true
@@ -451,6 +479,9 @@ func (e *Engine) filterRecs(ctx context.Context, in []aiRec, f recFilter, req Re
 			if !mine {
 				continue
 			}
+		}
+		if f.taken != nil {
+			f.taken[rk] = true
 		}
 		out = append(out, rec)
 		if len(out) >= req.Count {

@@ -44,6 +44,8 @@ type aiFake struct {
 	claudeReply  func(n int) any
 	claudeStatus func(model, body string) (int, string) // non-zero status fails that call
 	deadGemini   string                                 // this model answers 404, like a retired one
+	followUps    bool                                   // let "asking for more" requests through; otherwise they get an empty list
+	quotaGemini  string                                 // models containing this answer 429, like a free-tier limit
 }
 
 func (f *aiFake) server(t *testing.T) *httptest.Server {
@@ -58,6 +60,10 @@ func (f *aiFake) server(t *testing.T) *httptest.Server {
 		defer f.mu.Unlock()
 		b, _ := io.ReadAll(r.Body)
 		switch {
+		case r.URL.Path == "/v1/messages" && !f.followUps && strings.Contains(string(b), "You already suggested these"):
+			json.NewEncoder(w).Encode(map[string]any{"stop_reason": "end_turn", "content": []any{map[string]any{"type": "text", "text": "[]"}}})
+		case strings.Contains(r.URL.Path, ":generateContent") && !f.followUps && strings.Contains(string(b), "You already suggested these"):
+			json.NewEncoder(w).Encode(map[string]any{"candidates": []any{map[string]any{"content": map[string]any{"parts": []any{map[string]any{"text": "[]"}}}}}})
 		case r.URL.Path == "/v1/messages":
 			f.claudeBodies = append(f.claudeBodies, string(b))
 			var sent struct {
@@ -96,12 +102,19 @@ func (f *aiFake) server(t *testing.T) *httptest.Server {
 				{"name": "models/gemini-9.0-pro-preview", "supportedGenerationMethods": []string{"generateContent"}},
 				{"name": "models/gemini-8.5-pro", "supportedGenerationMethods": []string{"generateContent"}},
 				{"name": "models/gemini-9.5-pro-image", "supportedGenerationMethods": []string{"generateContent"}},
+				{"name": "models/gemini-9.8-pro-preview-customtools", "supportedGenerationMethods": []string{"generateContent"}},
+				{"name": "models/gemini-pro-latest", "supportedGenerationMethods": []string{"generateContent"}},
 				{"name": "models/gemini-9.9-flash", "supportedGenerationMethods": []string{"generateContent"}},
 				{"name": "models/gemini-9.9-pro-embed", "supportedGenerationMethods": []string{"embedContent"}},
 			}})
 		case strings.Contains(r.URL.Path, ":generateContent"):
 			m := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v1beta/models/"), ":generateContent")
 			f.geminiModels = append(f.geminiModels, m)
+			if f.quotaGemini != "" && strings.Contains(m, f.quotaGemini) {
+				w.WriteHeader(http.StatusTooManyRequests)
+				io.WriteString(w, `{"error":{"code":429,"message":"You exceeded your current quota","status":"RESOURCE_EXHAUSTED"}}`)
+				return
+			}
 			if m == f.deadGemini {
 				w.WriteHeader(http.StatusNotFound)
 				io.WriteString(w, `{"error":{"code":404,"message":"This model is no longer available","status":"NOT_FOUND"}}`)
@@ -215,6 +228,56 @@ func TestFailedModelFallsBackToTheNextOne(t *testing.T) {
 	}
 	if len(f.claudeBodies) != 0 {
 		t.Fatal("the other service shouldn't be used when a second model worked")
+	}
+}
+
+func TestAsksAgainWhenMostSuggestionsAreOwned(t *testing.T) {
+	f := &aiFake{followUps: true}
+	f.claudeReply = func(n int) any {
+		list := `[{"kind":"movie","title":"Thief","year":1981,"reason":"a"},{"kind":"movie","title":"Ronin","year":1998,"reason":"b"}]`
+		if n == 2 {
+			list = `[{"kind":"movie","title":"Thief","year":1981,"reason":"a"},{"kind":"movie","title":"Manhunter","year":1986,"reason":"c"},{"kind":"movie","title":"Le Samourai","year":1967,"reason":"d"}]`
+		}
+		if n > 2 {
+			list = `[]`
+		}
+		return map[string]any{"stop_reason": "end_turn", "content": []any{map[string]any{"type": "text", "text": list}}}
+	}
+	eng, st := recEngine(t, f, config.ArrInstance{Kind: "radarr", Name: "radarr"})
+	ctx := context.Background()
+	if _, err := st.DB.Exec(`INSERT INTO arr_items(instance,arr_id,kind,title,year,hash,seen_at) VALUES('radarr',1,'movie','Ronin',1998,'h',1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := eng.Recommend(ctx, RecRequest{User: "me", Provider: "claude", Count: 4}, noReport); err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := st.RecRuns(ctx, 1)
+	var got []string
+	for _, c := range runs[0].Recs {
+		got = append(got, c.Title)
+	}
+	if strings.Join(got, ",") != "Thief,Manhunter,Le Samourai" {
+		t.Fatalf("kept: %v", got)
+	}
+	if len(f.claudeBodies) != 3 || !strings.Contains(f.claudeBodies[1], "You already suggested these") || !strings.Contains(f.claudeBodies[1], "- Ronin") {
+		t.Fatalf("expected two follow-up requests naming earlier titles, got %d calls", len(f.claudeBodies))
+	}
+}
+
+func TestGeminiQuotaFallsBackToFlash(t *testing.T) {
+	f := &aiFake{quotaGemini: "-pro"}
+	eng, st := recEngine(t, f)
+	eng.cfg.GeminiModel = ModelAuto
+	ctx := context.Background()
+	if err := eng.Recommend(ctx, RecRequest{User: "me", Provider: "gemini", Count: 5}, noReport); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(f.geminiModels, ","); got != "gemini-9.0-pro-preview,gemini-8.5-pro,gemini-9.9-flash" {
+		t.Fatalf("models tried: %s", got)
+	}
+	runs, _ := st.RecRuns(ctx, 5)
+	if len(runs) != 1 || runs[0].Error != "" || runs[0].Model != "gemini-9.9-flash" || len(runs[0].Recs) != 3 {
+		t.Fatalf("run: %+v", runs[0])
 	}
 }
 

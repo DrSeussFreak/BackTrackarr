@@ -94,9 +94,27 @@ func (s *Store) LastRecRunAt(ctx context.Context, user string) (int64, error) {
 
 // PlaySourceFamilies counts plays by where they came from, grouped by the
 // part before the first dash ("plex-webhook" and "plex-live" are both "plex").
+//
+// It reads every play, so the answer is kept until plays change: the
+// Recommendations page asks on every load.
 func (s *Store) PlaySourceFamilies(ctx context.Context) ([]NameCount, error) {
-	return s.nameCounts(ctx, `SELECT substr(source,1,instr(source||'-','-')-1) f, COUNT(*) c FROM plays
+	gen := s.gen.Load()
+	s.famMu.Lock()
+	if s.famOK && s.famGen == gen {
+		out := s.fams
+		s.famMu.Unlock()
+		return out, nil
+	}
+	s.famMu.Unlock()
+	out, err := s.nameCounts(ctx, `SELECT substr(source,1,instr(source||'-','-')-1) f, COUNT(*) c FROM plays
 		WHERE source<>'' GROUP BY f ORDER BY c DESC`)
+	if err != nil {
+		return nil, err
+	}
+	s.famMu.Lock()
+	s.fams, s.famGen, s.famOK = out, gen, true
+	s.famMu.Unlock()
+	return out, nil
 }
 
 // familyFilter is the SQL test for "this play's source family is in fams".
