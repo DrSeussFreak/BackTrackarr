@@ -231,8 +231,10 @@ Your titles and ratings are sent to whichever AI provider you use.
 
 **`GEMINI_API_KEY`**: Want Gemini recommendations? Create a key at
 <https://aistudio.google.com/apikey>.
-- **`GEMINI_MODEL`**: Default `gemini-2.5-pro`. Set a newer model name here
-  if Google has one.
+- **`GEMINI_MODEL`**: Default `gemini-3.1-pro-preview`. If Google retires the
+  model, BackTrackarr switches to the newest Pro model your key can use.
+- **`REC_REFRESH_HOURS`**: How often recommendations refresh on their own.
+  Default `24`, `0` = off. Each refresh uses your API credit.
 
 **`AI_INCLUDE_ADULT`**: Should "include adult" be ticked by default?
 Default `false`.

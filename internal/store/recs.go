@@ -130,15 +130,16 @@ func (s *Store) InPlex(ctx context.Context, kind, title string, year int) (bool,
 // ---------- recommendation runs ----------
 
 type RecRun struct {
-	ID        int64
-	CreatedAt int64
-	User      string
-	Provider  string
-	Model     string
-	Prompt    string
-	Response  string
-	Error     string
-	Recs      []Rec
+	ID          int64
+	CreatedAt   int64
+	User        string
+	Provider    string
+	Model       string
+	Prompt      string
+	Response    string
+	Error       string
+	ErrorDetail string // the raw reply or error, shown only on request
+	Recs        []Rec
 }
 
 type Rec struct {
@@ -163,8 +164,8 @@ func (s *Store) SaveRecRun(ctx context.Context, r *RecRun) error {
 		return err
 	}
 	defer tx.Rollback()
-	err = tx.QueryRowContext(ctx, `INSERT INTO rec_runs(created_at,user,provider,model,prompt,response,error) VALUES(?,?,?,?,?,?,?) RETURNING id`,
-		time.Now().Unix(), r.User, r.Provider, r.Model, r.Prompt, ns(r.Response), ns(r.Error)).Scan(&r.ID)
+	err = tx.QueryRowContext(ctx, `INSERT INTO rec_runs(created_at,user,provider,model,prompt,response,error,error_detail) VALUES(?,?,?,?,?,?,?,?) RETURNING id`,
+		time.Now().Unix(), r.User, r.Provider, r.Model, r.Prompt, ns(r.Response), ns(r.Error), ns(r.ErrorDetail)).Scan(&r.ID)
 	if err != nil {
 		return err
 	}
@@ -180,14 +181,14 @@ func (s *Store) SaveRecRun(ctx context.Context, r *RecRun) error {
 
 // RecRuns returns the latest runs with their recommendations.
 func (s *Store) RecRuns(ctx context.Context, limit int) ([]*RecRun, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, created_at, user, provider, model, COALESCE(error,'') FROM rec_runs ORDER BY id DESC LIMIT ?`, limit)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, created_at, user, provider, model, COALESCE(error,''), COALESCE(error_detail,'') FROM rec_runs ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
 	}
 	var out []*RecRun
 	for rows.Next() {
 		r := &RecRun{}
-		if err := rows.Scan(&r.ID, &r.CreatedAt, &r.User, &r.Provider, &r.Model, &r.Error); err != nil {
+		if err := rows.Scan(&r.ID, &r.CreatedAt, &r.User, &r.Provider, &r.Model, &r.Error, &r.ErrorDetail); err != nil {
 			rows.Close()
 			return nil, err
 		}

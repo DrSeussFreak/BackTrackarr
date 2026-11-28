@@ -178,6 +178,7 @@ func run() (bool, error) {
 	if len(cfg.Arr) > 0 && cfg.ArrArchiveEvery > 0 {
 		go eng.RunArrArchiver(ctx)
 	}
+	go eng.RunRecRefresh(ctx) // does nothing without an AI key or a first request
 
 	go st.StatsNow(ctx, "") // have home page totals ready after a restart
 	st.WarmShelfStats()

@@ -254,8 +254,9 @@ func buildSettings() {
 	add(g, "ANTHROPIC_API_KEY", "Anthropic API key", "secret", "", "")
 	add(g, "CLAUDE_MODEL", "Claude model", "text", "claude-opus-5-5", "")
 	add(g, "GEMINI_API_KEY", "Gemini API key", "secret", "", "")
-	add(g, "GEMINI_MODEL", "Gemini model", "text", "gemini-2.5-pro", "")
+	add(g, "GEMINI_MODEL", "Gemini model", "text", "gemini-3.1-pro-preview", "If Google retires it, the newest Pro model is used automatically.")
 	add(g, "AI_INCLUDE_ADULT", "Include adult by default", "bool", "false", "")
+	add(g, "REC_REFRESH_HOURS", "Refresh recommendations every (hours)", "number", "24", "0 turns it off. Each refresh uses your API credit.")
 
 	g = "Comics and backups"
 	add(g, "CLZ_IMPORT_DIR", "CLZ import folder", "text", "", "Blank uses import/clz in the data folder.")

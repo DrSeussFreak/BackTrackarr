@@ -246,8 +246,18 @@ CREATE TABLE IF NOT EXISTS rec_runs (
   model       TEXT    NOT NULL,
   prompt      TEXT    NOT NULL,
   response    TEXT,
-  error       TEXT
+  error       TEXT,
+  error_detail TEXT
 );
+CREATE TABLE IF NOT EXISTS rec_ignores (
+  user        TEXT    NOT NULL,
+  kind        TEXT    NOT NULL,
+  norm        TEXT    NOT NULL,
+  title       TEXT    NOT NULL,
+  year        INTEGER,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (user, kind, norm)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS recs (
   id          INTEGER PRIMARY KEY,
   run_id      INTEGER NOT NULL REFERENCES rec_runs(id) ON DELETE CASCADE,

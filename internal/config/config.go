@@ -78,6 +78,7 @@ type Config struct {
 	GeminiModel    string
 	GeminiURL      string
 	AIIncludeAdult bool
+	RecRefresh     time.Duration // how often recommendations refresh on their own (0 = off)
 
 	// Streaming services (Netflix, Disney+, Hulu, Prime Video...): no public
 	// APIs exist, so plays come from history exports, the browser userscript,
@@ -229,9 +230,10 @@ func Load() *Config {
 		AnthropicModel:    env("CLAUDE_MODEL", "claude-opus-5-5"),
 		AnthropicURL:      strings.TrimRight(env("ANTHROPIC_BASE_URL", "https://api.anthropic.com"), "/"),
 		GeminiKey:         env("GEMINI_API_KEY", ""),
-		GeminiModel:       env("GEMINI_MODEL", "gemini-2.5-pro"),
+		GeminiModel:       env("GEMINI_MODEL", "gemini-3.1-pro-preview"),
 		GeminiURL:         strings.TrimRight(env("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com"), "/"),
 		AIIncludeAdult:    envBool("AI_INCLUDE_ADULT", false),
+		RecRefresh:        time.Duration(envInt("REC_REFRESH_HOURS", 24)) * time.Hour,
 		TMDBKey:           env("TMDB_API_KEY", ""),
 		TMDBURL:           strings.TrimRight(env("TMDB_BASE_URL", "https://api.themoviedb.org"), "/"),
 		StreamingRegion:   strings.ToUpper(env("STREAMING_REGION", "US")),

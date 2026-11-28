@@ -62,6 +62,7 @@ var settingInfo = map[string]Info{
 	"GEMINI_API_KEY":    {"Your Gemini API key.", "AI recommendations from Gemini. Skip if you don't want them.", optional},
 	"GEMINI_MODEL":      {"Which Gemini model to use.", "Nothing. Leave the default.", advanced},
 	"AI_INCLUDE_ADULT":  {"Ticks Include adult by default.", "Using private-library plays in recommendations.", optional},
+	"REC_REFRESH_HOURS": {"How often recommendations refresh on their own.", "Keeping the Recommendations page filled. Each refresh uses Claude and Gemini credit.", optional},
 
 	"CLZ_IMPORT_DIR":       {"A folder watched for CLZ Comics exports.", "Automatic imports. Skip if you upload on the page.", advanced},
 	"BACKUP_EVERY":         {"How often a database backup is made.", "Recovering from a mistake or failed disk.", recommended},

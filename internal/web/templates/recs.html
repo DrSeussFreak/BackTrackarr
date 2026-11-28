@@ -1,28 +1,43 @@
 {{define "content"}}
 <div class="head"><h1>For you</h1></div>
-<p class="muted">Recommendations from your ratings, rewatches and recent plays, by Claude and Gemini. Titles you've already watched are filtered out; ones already in Plex are marked.</p>
+<p class="muted">Recommendations from your ratings, rewatches and recent plays, by Claude and Gemini. Titles you've watched, already have or ignored are left out; ones already in Plex are marked.</p>
 
 <section class="panel">
   {{if not .Providers}}
     <p class="warn">Set <code>ANTHROPIC_API_KEY</code> (Claude) and/or <code>GEMINI_API_KEY</code> (Gemini) to get recommendations.</p>
   {{else}}
-  <form method="post" action="/recs" class="row">
-    <select name="user" title="Whose taste">
-      <option value="">Everyone</option>
-      {{$d := .DefaultUser}}{{range .Users}}<option value="{{.Name}}" {{if eq .Name $d}}selected{{end}}>{{.Name}}</option>{{end}}
-    </select>
-    <select name="provider">
-      {{if gt (len .Providers) 1}}<option value="both">Claude + Gemini</option>{{end}}
-      {{range .Providers}}<option value="{{.}}">{{.}}</option>{{end}}
-    </select>
-    <select name="kind"><option value="any">Movies &amp; shows</option><option value="movie">Movies</option><option value="show">Shows</option></select>
-    <input name="count" type="number" min="5" max="50" value="20" style="width:5em" title="How many">
-    <input name="note" placeholder="Optional: “something light”, “80s sci-fi”…" style="flex:1;min-width:200px">
-    <label class="small"><input type="checkbox" name="adult" value="1" {{if .Cfg.AIIncludeAdult}}checked{{end}}> include adult</label>
-    {{if .Cfg.MyServices}}<label class="small" title="In Plex or on {{range $i, $s := .Cfg.MyServices}}{{if $i}}, {{end}}{{$s}}{{end}}"><input type="checkbox" name="mine" value="1"> only what I can watch</label>{{end}}
-    <button>Recommend</button>
+  <form method="post" action="/recs">
+    <div class="row">
+      <select name="user" title="Whose taste" onchange="location.href='/recs?user='+encodeURIComponent(this.value)">
+        <option value="">Everyone</option>
+        {{$d := .User}}{{range .Users}}<option value="{{.Name}}" {{if eq .Name $d}}selected{{end}}>{{.Name}}</option>{{end}}
+      </select>
+      <select name="provider">
+        {{if gt (len .Providers) 1}}<option value="both">Claude + Gemini</option>{{end}}
+        {{range .Providers}}<option value="{{.}}">{{.}}</option>{{end}}
+      </select>
+      <select name="kind"><option value="any">Movies &amp; shows</option><option value="movie">Movies</option><option value="show">Shows</option></select>
+      <input name="count" type="number" min="5" max="50" value="20" style="width:5em" title="How many">
+      <input name="note" placeholder="Optional: “something light”, “80s sci-fi”…" style="flex:1;min-width:200px">
+      <label class="small"><input type="checkbox" name="adult" value="1" {{if .Cfg.AIIncludeAdult}}checked{{end}}> include adult</label>
+      {{if .Cfg.MyServices}}<label class="small" title="In Plex or on {{range $i, $s := .Cfg.MyServices}}{{if $i}}, {{end}}{{$s}}{{end}}"><input type="checkbox" name="mine" value="1"> only what I can watch</label>{{end}}
+      <button>Recommend</button>
+    </div>
+    <details class="rec-sources">
+      <summary>Sources used{{if .User}} for {{.User}}{{end}}: {{.SourcesChecked}} of {{.SourcesTotal}}</summary>
+      <input type="hidden" name="src_shown" value="1">
+      {{range .SourceGroups}}
+      <fieldset>
+        <legend>{{.Name}}</legend>
+        {{range .Sources}}<label class="check"><input type="checkbox" name="src" value="{{.ID}}" {{if .Checked}}checked{{end}}> {{.Label}}{{if .Adult}} <span class="tag private">adult</span>{{end}}</label>{{end}}
+      </fieldset>
+      {{end}}
+      <p class="muted small">Your choice is saved when you press Recommend. Adult sources start unchecked. Nothing adult is recommended unless you tick one, or tick “include adult”. With an adult source ticked, results follow that source's style.</p>
+    </details>
   </form>
-  <p class="muted small">Models: Claude <code>{{.Cfg.AnthropicModel}}</code>, Gemini <code>{{.Cfg.GeminiModel}}</code>. Your titles and ratings are sent to the provider you pick. “Include adult” also uses plays from private libraries; providers may still decline explicit titles.</p>
+  <p class="muted small">Models: Claude <code>{{.Cfg.AnthropicModel}}</code>, Gemini <code>{{.GeminiModel}}</code>{{if .GeminiSwitched}} (picked automatically, because <code>{{.Cfg.GeminiModel}}</code> is no longer available){{end}}. Your titles and ratings are sent to the provider you pick. Providers may still decline explicit titles.</p>
+  <p class="muted small">{{if .LastRun}}Last refreshed {{ts .LastRun}}.{{else}}No recommendations yet. Press Recommend to get the first set.{{end}}
+    {{if .RefreshHours}}{{if .NextRun}} Refreshes on its own every {{.RefreshHours}} hours; next after {{ts .NextRun}}.{{else}} After the first set, they refresh on their own every {{.RefreshHours}} hours.{{end}}{{else}} Automatic refresh is off.{{end}}</p>
   {{end}}
 </section>
 
@@ -31,30 +46,60 @@
 {{range .Runs}}
 <section class="panel">
   <h2>{{.Provider}} · {{.Model}} <span class="more muted">{{ts .CreatedAt}}{{if .User}} · for {{.User}}{{end}}</span></h2>
-  {{if .Error}}<p class="bad small">{{.Error}}</p>{{end}}
-  <table>
+  {{if .Error}}
+    <p class="bad small">{{.Error}}</p>
+    {{if .ErrorDetail}}<details class="small muted"><summary>Technical details</summary><pre class="rec-detail">{{.ErrorDetail}}</pre></details>{{end}}
+  {{end}}
+  {{if or .Recs (not .Error)}}
+  <table class="recs">
     <tbody>
     {{range .Recs}}
       <tr>
         <td><span class="tag {{if eq .Kind "movie"}}movie{{else}}episode{{end}}">{{.Kind}}</span><b>{{.Title}}</b>{{if .Year}} ({{.Year}}){{end}}
           {{if .InPlex}}<span class="tag" title="Already in your Plex library">in Plex</span>{{end}}
-          {{range .Providers}}<span class="tag {{if mine .}}ok{{end}}" title="Streams on {{.}}">{{.}}</span>{{end}}
+          {{$t := .Title}}{{$b := badges .Providers}}
+          {{range $b.Show}}<a class="tag {{if mine .}}ok{{end}}" href="{{watchlink . $t}}" target="_blank" rel="noopener" title="Find it on {{.}}">{{.}}</a>{{end}}
+          {{if $b.More}}<details class="more-tags"><summary>+ {{len $b.More}} more</summary>{{range $b.More}}<a class="tag" href="{{watchlink . $t}}" target="_blank" rel="noopener" title="Find it on {{.}}">{{.}}</a>{{end}}</details>{{end}}
           {{if .IMDB}}<a class="small" href="https://www.imdb.com/title/{{.IMDB}}/" target="_blank" rel="noopener">IMDb</a>{{end}}
           <div class="muted small">{{.Reason}}</div></td>
-        <td class="nowrap">
+        <td class="nowrap rec-actions">
           {{if .AddedTo}}<span class="ok small">added to {{.AddedTo}}</span>{{end}}
           {{if and $.HasSeerr (not .InPlex)}}<form method="post" action="/recs/{{.ID}}/seerr" class="inline"><button class="ghost">Request</button></form>{{end}}
-          {{if and $.Arr (not .InPlex)}}
+          {{if and (not .InPlex) (or (and (eq .Kind "movie") $.HasMovieArr) (and (eq .Kind "show") $.HasShowArr))}}
           <form method="post" action="/recs/{{.ID}}/arr" class="inline">
+            <input type="hidden" name="user" value="{{$.User}}">
             <select name="instance">{{$k := .Kind}}{{range $.Arr}}{{if or (and (eq $k "movie") (or (eq .Kind "radarr") (eq .Kind "whisparr"))) (and (eq $k "show") (or (eq .Kind "sonarr") (eq .Kind "whisparr")))}}<option>{{.Name}}</option>{{end}}{{end}}</select>
             <button class="ghost">Add</button>
           </form>
           {{end}}
+          <form method="post" action="/recs/{{.ID}}/ignore" class="inline"><button class="ghost" title="Never recommend this again">Ignore</button></form>
         </td>
       </tr>
-    {{else}}<tr><td class="muted">No recommendations in this run.</td></tr>{{end}}
+    {{else}}<tr><td class="muted">Nothing left in this set.</td></tr>{{end}}
     </tbody>
   </table>
+  {{end}}
 </section>
 {{end}}
+
+{{if .Ignored}}
+<section class="panel" id="ignored">
+  <details>
+    <summary><b>Ignored</b> <span class="muted small">{{len .Ignored}} {{if eq (len .Ignored) 1}}title{{else}}titles{{end}} that won't be recommended{{if .User}} to {{.User}}{{end}}</span></summary>
+    <table>
+      <tbody>
+      {{range .Ignored}}
+        <tr>
+          <td><span class="tag {{if eq .Kind "movie"}}movie{{else}}episode{{end}}">{{.Kind}}</span>{{.Title}}{{if .Year}} ({{.Year}}){{end}} <span class="muted small">ignored {{ts .At}}</span></td>
+          <td class="nowrap"><form method="post" action="/recs/unignore" class="inline">
+            <input type="hidden" name="user" value="{{$.User}}"><input type="hidden" name="kind" value="{{.Kind}}"><input type="hidden" name="norm" value="{{.Norm}}">
+            <button class="ghost">Restore</button></form></td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+  </details>
+</section>
+{{end}}
+{{if .Runs}}<p class="muted small">Where-to-watch data comes from JustWatch, through TMDB. Each badge searches that service for the title.</p>{{end}}
 {{end}}

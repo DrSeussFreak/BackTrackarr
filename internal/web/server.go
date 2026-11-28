@@ -98,11 +98,13 @@ var funcs = template.FuncMap{
 		}
 		return a * 100 / b
 	},
-	"display": func(m model.Media) string { return m.Display() },
-	"list":    func(v ...string) []string { return v },
-	"i64":     func(n int) int64 { return int64(n) },
-	"inc":     func(n int) int { return n + 1 },
-	"mine":    func(string) bool { return false }, // replaced per server in New
+	"display":   func(m model.Media) string { return m.Display() },
+	"list":      func(v ...string) []string { return v },
+	"i64":       func(n int) int64 { return int64(n) },
+	"inc":       func(n int) int { return n + 1 },
+	"mine":      func(string) bool { return false }, // replaced per server in New
+	"badges":    func([]string) badgeSet { return badgeSet{} },
+	"watchlink": func(string, string) string { return "" },
 }
 
 func num(n int64) string {
@@ -127,6 +129,8 @@ func New(cfg *config.Config, st *store.Store, eng *core.Engine, log *slog.Logger
 		fm[k] = v
 	}
 	fm["mine"] = eng.IsMyService
+	fm["badges"] = s.splitBadges
+	fm["watchlink"] = s.watchLink
 	fm["asset"] = assetURL
 	for _, page := range []string{"dashboard", "history", "sync", "library", "list", "restore", "comics", "recs", "streaming", "settings", "setup", "import", "autodelete", "shelf", "login", "mfa", "security", "encryption", "jobs", "connections"} {
 		s.tmpl[page] = template.Must(template.New("").Funcs(fm).ParseFS(assets, "templates/layout.html", "templates/"+page+".html"))

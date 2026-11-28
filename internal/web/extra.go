@@ -28,9 +28,7 @@ func (s *Server) routesExtra(admin *http.ServeMux) {
 	admin.HandleFunc("GET /comics", s.comicsPage)
 	admin.HandleFunc("POST /comics/import", s.comicsImport)
 	admin.HandleFunc("GET /api/comics/export", s.apiComicsExport)
-	admin.HandleFunc("GET /recs", s.recsPage)
-	admin.HandleFunc("POST /recs", s.recsRun)
-	admin.HandleFunc("POST /recs/{id}/arr", s.recToArr)
+	s.routesRecs(admin)
 }
 
 func (s *Server) flash(w http.ResponseWriter, r *http.Request, to, msg string) {
@@ -319,43 +317,4 @@ func (s *Server) apiComicsExport(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.log.Error("comics export", "err", err)
 	}
-}
-
-// ---------- recommendations ----------
-
-func (s *Server) recsPage(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	runs, err := s.st.RecRuns(ctx, 10)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	users, _ := s.st.Users(ctx)
-	type arrOpt struct{ Name, Kind string }
-	var arr []arrOpt
-	for _, a := range s.eng.ArrInstances() {
-		arr = append(arr, arrOpt{a.Name, a.Kind})
-	}
-	s.render(w, "recs", M{"Title": "Recommendations", "Nav": "recs", "Runs": runs, "Users": users, "DefaultUser": s.defaultUser(users),
-		"Providers": s.eng.AIProviders(), "Arr": arr, "HasSeerr": s.cfg.SeerrURL != "" && s.cfg.SeerrKey != "", "Cfg": s.cfg, "Jobs": s.eng.Jobs.List(), "Refresh": s.eng.Jobs.AnyRunning(),
-		"Flash": takeFlash(w, r)})
-}
-
-func (s *Server) recsRun(w http.ResponseWriter, r *http.Request) {
-	n, _ := strconv.Atoi(r.FormValue("count"))
-	req := core.RecRequest{User: r.FormValue("user"), Provider: r.FormValue("provider"), Kind: r.FormValue("kind"), Count: n,
-		IncludeAdult: r.FormValue("adult") == "1", Note: r.FormValue("note"), OnlyMine: r.FormValue("mine") == "1"}
-	s.eng.Jobs.Start(s.eng.Context(), "recommendations", func(ctx context.Context, report func(string)) error {
-		return s.eng.Recommend(ctx, req, report)
-	})
-	back(w, r, "/recs")
-}
-
-func (s *Server) recToArr(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	msg, err := s.eng.AddToArr(r.Context(), id, r.FormValue("instance"))
-	if err != nil {
-		msg = "Could not add: " + err.Error()
-	}
-	s.flash(w, r, "/recs", msg)
 }

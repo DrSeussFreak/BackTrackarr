@@ -22,7 +22,7 @@ import (
 //	   only, created by schema.sql
 //	7: import_extras (watchlists, lists and more from imports); new table only
 //	8: sessions.player and source (Now Playing), auto-delete tables
-const schemaVersion = 8
+const schemaVersion = 9
 
 func hasTable(db *sql.DB, name string) (bool, error) {
 	var n int
@@ -72,6 +72,11 @@ func migrate(db *sql.DB) error {
 			if err := addColumn(db, "sessions", col, "TEXT"); err != nil {
 				return fmt.Errorf("to version 8: %w", err)
 			}
+		}
+	}
+	if ver < 9 {
+		if err := addColumn(db, "rec_runs", "error_detail", "TEXT"); err != nil {
+			return fmt.Errorf("to version 9: %w", err)
 		}
 	}
 	return nil
